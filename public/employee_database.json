@@ -1,0 +1,249 @@
+{
+    "employees": [
+        {
+            "first_name": "Maria",
+            "last_name": "Garcia",
+            "expertise_areas": [
+                "Grill Station",
+                "Prep Cook",
+                "Line Cook"
+            ],
+            "day_available": [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday"
+            ],
+            "days_off": [
+                "12/25/2024",
+                "01/01/2025",
+                "07/04/2025"
+            ]
+        },
+        {
+            "first_name": "James",
+            "last_name": "Thompson",
+            "expertise_areas": [
+                "Bartending",
+                "Mixology",
+                "Wine Service"
+            ],
+            "day_available": [
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+            ],
+            "days_off": [
+                "11/28/2024",
+                "12/25/2024",
+                "12/31/2024"
+            ]
+        },
+        {
+            "first_name": "Sarah",
+            "last_name": "Johnson",
+            "expertise_areas": [
+                "Server",
+                "Host",
+                "Customer Service"
+            ],
+            "day_available": [
+                "Tuesday",
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+            ],
+            "days_off": [
+                "12/24/2024",
+                "12/25/2024"
+            ]
+        },
+        {
+            "first_name": "Carlos",
+            "last_name": "Rodriguez",
+            "expertise_areas": [
+                "Sous Chef",
+                "Pastry",
+                "Sauce Station"
+            ],
+            "day_available": [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday"
+            ],
+            "days_off": [
+                "10/31/2024",
+                "11/24/2024",
+                "12/25/2024"
+            ]
+        },
+        {
+            "first_name": "Emily",
+            "last_name": "Chen",
+            "expertise_areas": [
+                "Server",
+                "Table Management",
+                "POS System"
+            ],
+            "day_available": [
+                "Friday",
+                "Saturday",
+                "Sunday"
+            ],
+            "days_off": [
+                "11/28/2024",
+                "11/29/2024"
+            ]
+        },
+        {
+            "first_name": "Michael",
+            "last_name": "O'Brien",
+            "expertise_areas": [
+                "Head Chef",
+                "Menu Planning",
+                "Kitchen Management"
+            ],
+            "day_available": [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday"
+            ],
+            "days_off": [
+                "12/25/2024",
+                "01/01/2025"
+            ]
+        },
+        {
+            "first_name": "Isabella",
+            "last_name": "Martinez",
+            "expertise_areas": [
+                "Dishwasher",
+                "Prep Cook",
+                "Kitchen Assistant"
+            ],
+            "day_available": [
+                "Monday",
+                "Wednesday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+            ],
+            "days_off": [
+                "12/24/2024",
+                "12/25/2024",
+                "12/26/2024"
+            ]
+        },
+        {
+            "first_name": "David",
+            "last_name": "Kim",
+            "expertise_areas": [
+                "Busser",
+                "Food Runner",
+                "Server Assistant"
+            ],
+            "day_available": [
+                "Thursday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+            ],
+            "days_off": [
+                "11/28/2024",
+                "01/01/2025"
+            ]
+        },
+        {
+            "first_name": "Nicole",
+            "last_name": "Williams",
+            "expertise_areas": [
+                "Host",
+                "Reservations",
+                "Customer Relations"
+            ],
+            "day_available": [
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday",
+                "Saturday"
+            ],
+            "days_off": [
+                "12/25/2024",
+                "12/31/2024",
+                "01/01/2025"
+            ]
+        },
+        {
+            "first_name": "Antonio",
+            "last_name": "Rossi",
+            "expertise_areas": [
+                "Pizza Chef",
+                "Italian Cuisine",
+                "Pasta Station"
+            ],
+            "day_available": [
+                "Monday",
+                "Tuesday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+            ],
+            "days_off": [
+                "11/25/2024",
+                "12/25/2024"
+            ]
+        },
+        {
+            "first_name": "Amanda",
+            "last_name": "Taylor",
+            "expertise_areas": [
+                "Server",
+                "Catering",
+                "Event Service"
+            ],
+            "day_available": [
+                "Wednesday",
+                "Friday",
+                "Saturday",
+                "Sunday"
+            ],
+            "days_off": [
+                "12/24/2024",
+                "12/25/2024",
+                "01/01/2025"
+            ]
+        },
+        {
+            "first_name": "Thomas",
+            "last_name": "Anderson",
+            "expertise_areas": [
+                "Bar Manager",
+                "Inventory Management",
+                "Staff Training"
+            ],
+            "day_available": [
+                "Monday",
+                "Tuesday",
+                "Wednesday",
+                "Thursday",
+                "Friday"
+            ],
+            "days_off": [
+                "11/28/2024",
+                "12/25/2024"
+            ]
+        }
+    ],
+    "total_count": 12,
+    "last_updated": "11/17/2025 16:04:37"
+}
