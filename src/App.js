@@ -47,7 +47,16 @@ function App() {
   const [draggedTask, setDraggedTask] = useState(null);
   const [showAddRole, setShowAddRole] = useState(false);
   const [newRoleName, setNewRoleName] = useState('');
+  const [newRoleCapacity, setNewRoleCapacity] = useState(1);
   const [filterSection, setFilterSection] = useState('all');
+  const [showEmployeeModal, setShowEmployeeModal] = useState(false);
+  const [editingEmployee, setEditingEmployee] = useState(null);
+  const [employeeFormData, setEmployeeFormData] = useState({
+    name: '',
+    skills: [],
+    performance: 4.0
+  });
+  const [selectedSkills, setSelectedSkills] = useState([]);
 
   const handleDragStart = (e, employee) => {
     setDraggedEmployee(employee);
@@ -108,15 +117,108 @@ function App() {
         ...prev,
         [newRoleName.toLowerCase()]: []
       }));
-      // Default capacity for new roles is 1
       setRoleCapacity(prev => ({
         ...prev,
-        [newRoleName.toLowerCase()]: 1
+        [newRoleName.toLowerCase()]: newRoleCapacity
       }));
       setNewRoleName('');
+      setNewRoleCapacity(1);
       setShowAddRole(false);
     }
   };
+
+  const openAddEmployeeModal = () => {
+    setEditingEmployee(null);
+    setEmployeeFormData({
+      name: '',
+      skills: [],
+      performance: 4.0
+    });
+    setSelectedSkills([]);
+    setShowEmployeeModal(true);
+  };
+
+  const openEditEmployeeModal = (employee) => {
+    setEditingEmployee(employee);
+    setEmployeeFormData({
+      name: employee.name,
+      skills: employee.skills,
+      performance: employee.performance
+    });
+    setSelectedSkills(employee.skills);
+    setShowEmployeeModal(true);
+  };
+
+  const saveEmployee = () => {
+    if (!employeeFormData.name.trim()) return;
+
+    if (editingEmployee) {
+      // Update existing employee
+      const updatedEmployee = {
+        ...editingEmployee,
+        name: employeeFormData.name,
+        skills: selectedSkills,
+        performance: employeeFormData.performance
+      };
+
+      // Update in available staff
+      setAvailableStaff(prev => 
+        prev.map(emp => emp.id === editingEmployee.id ? updatedEmployee : emp)
+      );
+
+      // Update in roles if assigned
+      setRoles(prev => {
+        const newRoles = {};
+        Object.keys(prev).forEach(role => {
+          newRoles[role] = prev[role].map(emp => 
+            emp.id === editingEmployee.id ? updatedEmployee : emp
+          );
+        });
+        return newRoles;
+      });
+    } else {
+      // Add new employee
+      const newEmployee = {
+        id: Date.now(),
+        name: employeeFormData.name,
+        skills: selectedSkills,
+        availability: true,
+        performance: employeeFormData.performance
+      };
+      setAvailableStaff(prev => [...prev, newEmployee]);
+    }
+
+    setShowEmployeeModal(false);
+    setEditingEmployee(null);
+    setEmployeeFormData({ name: '', skills: [], performance: 4.0 });
+    setSelectedSkills([]);
+  };
+
+  const deleteEmployee = (employee) => {
+    if (window.confirm(`Are you sure you want to delete ${employee.name}?`)) {
+      // Remove from available staff
+      setAvailableStaff(prev => prev.filter(emp => emp.id !== employee.id));
+
+      // Remove from all roles
+      setRoles(prev => {
+        const newRoles = {};
+        Object.keys(prev).forEach(role => {
+          newRoles[role] = prev[role].filter(emp => emp.id !== employee.id);
+        });
+        return newRoles;
+      });
+    }
+  };
+
+  const toggleSkill = (skill) => {
+    setSelectedSkills(prev => 
+      prev.includes(skill) 
+        ? prev.filter(s => s !== skill)
+        : [...prev, skill]
+    );
+  };
+
+  const availableSkills = ['bartender', 'runner', 'server', 'dishwasher', 'host', 'chef', 'busser'];
 
   const updateRoleCapacity = (roleName, newCapacity) => {
     const capacity = parseInt(newCapacity);
@@ -289,51 +391,66 @@ function App() {
 
             <button 
               className="add-role-btn"
-              onClick={() => setShowAddRole(!showAddRole)}
+              onClick={() => setShowAddRole(true)}
             >
               + Add Role
             </button>
 
             {showAddRole && (
-              <div className="add-role-form">
-                <input 
-                  type="text"
-                  value={newRoleName}
-                  onChange={(e) => setNewRoleName(e.target.value)}
-                  placeholder="Role name (e.g., Host)"
-                  className="role-input"
-                />
-                <input 
-                  type="number"
-                  min="1"
-                  defaultValue="1"
-                  placeholder="Required"
-                  className="capacity-input-inline"
-                  id="newRoleCapacity"
-                />
-                <button 
-                  onClick={() => {
-                    const capacityInput = document.getElementById('newRoleCapacity');
-                    const capacity = parseInt(capacityInput.value) || 1;
-                    if (newRoleName.trim() && !roles[newRoleName.toLowerCase()]) {
-                      setRoles(prev => ({
-                        ...prev,
-                        [newRoleName.toLowerCase()]: []
-                      }));
-                      setRoleCapacity(prev => ({
-                        ...prev,
-                        [newRoleName.toLowerCase()]: capacity
-                      }));
-                      setNewRoleName('');
-                      capacityInput.value = '1';
-                      setShowAddRole(false);
-                    }
-                  }} 
-                  className="confirm-btn"
-                >
-                  Add
-                </button>
-              </div>
+              <>
+                <div className="modal-overlay" onClick={() => setShowAddRole(false)}></div>
+                <div className="modal">
+                  <div className="modal-header">
+                    <h3>Add New Role</h3>
+                  </div>
+                  <div className="modal-body">
+                    <label className="input-label">Role Name</label>
+                    <input 
+                      type="text"
+                      value={newRoleName}
+                      onChange={(e) => setNewRoleName(e.target.value)}
+                      placeholder="e.g., Host, Busser, Chef"
+                      className="modal-input"
+                      autoFocus
+                    />
+                    
+                    <label className="input-label">Required Employees</label>
+                    <div className="capacity-adjuster">
+                      <button 
+                        className="capacity-btn"
+                        onClick={() => setNewRoleCapacity(Math.max(1, newRoleCapacity - 1))}
+                      >
+                        −
+                      </button>
+                      <span className="capacity-display">{newRoleCapacity}</span>
+                      <button 
+                        className="capacity-btn"
+                        onClick={() => setNewRoleCapacity(newRoleCapacity + 1)}
+                      >
+                        +
+                      </button>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button 
+                      className="modal-cancel-btn"
+                      onClick={() => {
+                        setShowAddRole(false);
+                        setNewRoleName('');
+                        setNewRoleCapacity(1);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="modal-confirm-btn"
+                      onClick={addNewRole}
+                    >
+                      Add Role
+                    </button>
+                  </div>
+                </div>
+              </>
             )}
 
             <div className="roles-grid">
@@ -431,7 +548,15 @@ function App() {
             </div>
 
             <div className="available-section">
-              <h3 className="section-title">Available Staff</h3>
+              <div className="section-header-with-button">
+                <h3 className="section-title">Available Staff</h3>
+                <button 
+                  className="add-employee-btn"
+                  onClick={openAddEmployeeModal}
+                >
+                  + Add Employee
+                </button>
+              </div>
               <div 
                 className="available-staff-grid"
                 onDragOver={handleDragOver}
@@ -444,7 +569,31 @@ function App() {
                     draggable
                     onDragStart={(e) => handleDragStart(e, employee)}
                   >
-                    <span className="employee-name">{employee.name}</span>
+                    <div className="employee-card-header">
+                      <span className="employee-name">{employee.name}</span>
+                      <div className="employee-actions">
+                        <button 
+                          className="edit-employee-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openEditEmployeeModal(employee);
+                          }}
+                          title="Edit employee"
+                        >
+                          ✏️
+                        </button>
+                        <button 
+                          className="delete-employee-btn"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            deleteEmployee(employee);
+                          }}
+                          title="Delete employee"
+                        >
+                          🗑️
+                        </button>
+                      </div>
+                    </div>
                     <div className="employee-skills">
                       {employee.skills.map(skill => (
                         <span key={skill} className="skill-tag">{skill}</span>
@@ -455,6 +604,75 @@ function App() {
                 ))}
               </div>
             </div>
+
+            {/* Employee Management Modal */}
+            {showEmployeeModal && (
+              <>
+                <div className="modal-overlay" onClick={() => setShowEmployeeModal(false)}></div>
+                <div className="modal employee-modal">
+                  <div className="modal-header">
+                    <h3>{editingEmployee ? 'Edit Employee' : 'Add New Employee'}</h3>
+                  </div>
+                  <div className="modal-body">
+                    <label className="input-label">Employee Name</label>
+                    <input 
+                      type="text"
+                      value={employeeFormData.name}
+                      onChange={(e) => setEmployeeFormData({...employeeFormData, name: e.target.value})}
+                      placeholder="Enter employee name"
+                      className="modal-input"
+                      autoFocus
+                    />
+                    
+                    <label className="input-label">Skills</label>
+                    <div className="skills-selector">
+                      {availableSkills.map(skill => (
+                        <button
+                          key={skill}
+                          className={`skill-selector-btn ${selectedSkills.includes(skill) ? 'selected' : ''}`}
+                          onClick={() => toggleSkill(skill)}
+                        >
+                          {skill}
+                        </button>
+                      ))}
+                    </div>
+
+                    <label className="input-label">Performance Rating</label>
+                    <div className="performance-slider-container">
+                      <input 
+                        type="range"
+                        min="1"
+                        max="5"
+                        step="0.1"
+                        value={employeeFormData.performance}
+                        onChange={(e) => setEmployeeFormData({...employeeFormData, performance: parseFloat(e.target.value)})}
+                        className="performance-slider"
+                      />
+                      <span className="performance-value">{employeeFormData.performance.toFixed(1)}★</span>
+                    </div>
+                  </div>
+                  <div className="modal-footer">
+                    <button 
+                      className="modal-cancel-btn"
+                      onClick={() => {
+                        setShowEmployeeModal(false);
+                        setEditingEmployee(null);
+                        setEmployeeFormData({ name: '', skills: [], performance: 4.0 });
+                        setSelectedSkills([]);
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="modal-confirm-btn"
+                      onClick={saveEmployee}
+                    >
+                      {editingEmployee ? 'Save Changes' : 'Add Employee'}
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
