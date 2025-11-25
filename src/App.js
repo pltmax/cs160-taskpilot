@@ -33,6 +33,16 @@ function App() {
   const [currentView, setCurrentView] = useState('scheduling');
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
+  
+  // Helper function to get date key
+  const getDateKey = (date) => {
+    return date.toISOString().split('T')[0]; // Returns YYYY-MM-DD
+  };
+  
+  // Store schedules by date
+  const [schedulesByDate, setSchedulesByDate] = useState({});
+  
+  // Current schedule state
   const [roles, setRoles] = useState({
     bartender: [],
     runner: [],
@@ -49,6 +59,7 @@ function App() {
   const [newRoleName, setNewRoleName] = useState('');
   const [newRoleCapacity, setNewRoleCapacity] = useState(1);
   const [filterSection, setFilterSection] = useState('all');
+  const [taskViewMode, setTaskViewMode] = useState('section'); // 'section' or 'status'
   const [showEmployeeModal, setShowEmployeeModal] = useState(false);
   const [editingEmployee, setEditingEmployee] = useState(null);
   const [employeeFormData, setEmployeeFormData] = useState({
@@ -57,6 +68,52 @@ function App() {
     performance: 4.0
   });
   const [selectedSkills, setSelectedSkills] = useState([]);
+  const [showRoleEmployeeModal, setShowRoleEmployeeModal] = useState(null); // stores roleName when adding to specific role
+  const [selectedEmployeeForRole, setSelectedEmployeeForRole] = useState(''); // stores selected employee name before adding
+  const [showVerificationModal, setShowVerificationModal] = useState(false);
+  const [taskToVerify, setTaskToVerify] = useState(null);
+  const [showAddTaskModal, setShowAddTaskModal] = useState(false);
+  const [newTaskData, setNewTaskData] = useState({
+    title: '',
+    section: 'Bar',
+    timestamp: '',
+    assignedTo: ''
+  });
+  const [showFeedbackModal, setShowFeedbackModal] = useState(false);
+  const [managerFeedback, setManagerFeedback] = useState('');
+
+  // Save current schedule whenever roles or availableStaff changes
+  useEffect(() => {
+    const dateKey = getDateKey(selectedDate);
+    setSchedulesByDate(prev => ({
+      ...prev,
+      [dateKey]: {
+        roles: roles,
+        availableStaff: availableStaff
+      }
+    }));
+  }, [roles, availableStaff, selectedDate]);
+
+  // Load schedule when date changes
+  useEffect(() => {
+    const dateKey = getDateKey(selectedDate);
+    const savedSchedule = schedulesByDate[dateKey];
+    
+    if (savedSchedule) {
+      // Load saved schedule for this date
+      setRoles(savedSchedule.roles);
+      setAvailableStaff(savedSchedule.availableStaff);
+    } else {
+      // Reset to initial state for new date
+      setRoles({
+        bartender: [],
+        runner: [],
+        server: [],
+        dishwasher: []
+      });
+      setAvailableStaff(initialEmployees);
+    }
+  }, [selectedDate]);
 
   const handleDragStart = (e, employee) => {
     setDraggedEmployee(employee);
@@ -136,6 +193,138 @@ function App() {
     });
     setSelectedSkills([]);
     setShowEmployeeModal(true);
+  };
+
+  const openAddEmployeeToRoleModal = (roleName) => {
+    setShowRoleEmployeeModal(roleName);
+    setSelectedEmployeeForRole('');
+  };
+
+  const addEmployeeToRole = () => {
+    if (!selectedEmployeeForRole || !showRoleEmployeeModal) return;
+    
+    const employee = availableStaff.find(emp => emp.name === selectedEmployeeForRole);
+    if (!employee) return;
+
+    // Add to role
+    setRoles(prev => ({
+      ...prev,
+      [showRoleEmployeeModal]: [...prev[showRoleEmployeeModal], employee]
+    }));
+
+    // Remove from available staff
+    setAvailableStaff(prev => prev.filter(emp => emp.id !== employee.id));
+    
+    // Close modal and reset
+    setShowRoleEmployeeModal(null);
+    setSelectedEmployeeForRole('');
+  };
+
+  // Task drag and drop handlers
+  const handleTaskDragStart = (e, task) => {
+    setDraggedTask(task);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleTaskDragOver = (e) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+  };
+
+  const handleTaskDrop = (e, newStatus) => {
+    e.preventDefault();
+    if (!draggedTask) return;
+
+    // If moving to completed, require verification
+    if (newStatus === 'completed' && draggedTask.status !== 'completed') {
+      setTaskToVerify(draggedTask);
+      setShowVerificationModal(true);
+    } else {
+      updateTaskStatus(draggedTask.id, newStatus);
+    }
+    
+    setDraggedTask(null);
+  };
+
+  // Handle image upload for task verification
+  const handleImageUpload = (e, taskId) => {
+    const file = e.target.files[0];
+    if (file) {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        setTasks(prev => prev.map(task => 
+          task.id === taskId ? { ...task, photo: reader.result } : task
+        ));
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  // Open verification modal
+  const openVerificationModal = (task) => {
+    setTaskToVerify(task);
+    setShowVerificationModal(true);
+  };
+
+  // Approve task verification
+  const approveTaskVerification = () => {
+    if (taskToVerify) {
+      setTasks(prev => prev.map(task => 
+        task.id === taskToVerify.id ? { ...task, status: 'completed', verified: true } : task
+      ));
+      setShowVerificationModal(false);
+      setTaskToVerify(null);
+    }
+  };
+
+  // Reject task verification
+  const rejectTaskVerification = () => {
+    // Open feedback modal instead of immediately rejecting
+    setShowVerificationModal(false);
+    setShowFeedbackModal(true);
+  };
+
+  // Submit rejection with feedback
+  const submitRejectionWithFeedback = () => {
+    if (taskToVerify) {
+      setTasks(prev => prev.map(task => 
+        task.id === taskToVerify.id ? { 
+          ...task, 
+          status: 'pending', 
+          photo: null,
+          feedback: managerFeedback,
+          feedbackTimestamp: new Date().toLocaleString()
+        } : task
+      ));
+      setShowFeedbackModal(false);
+      setTaskToVerify(null);
+      setManagerFeedback('');
+    }
+  };
+
+  // Add new task
+  const addNewTask = () => {
+    if (!newTaskData.title.trim() || !newTaskData.timestamp) return;
+
+    const newTask = {
+      id: Date.now(),
+      title: newTaskData.title,
+      assignedTo: newTaskData.assignedTo || null,
+      status: 'pending',
+      section: newTaskData.section,
+      timestamp: newTaskData.timestamp,
+      photo: null,
+      verified: false
+    };
+
+    setTasks(prev => [...prev, newTask]);
+    setShowAddTaskModal(false);
+    setNewTaskData({
+      title: '',
+      section: 'Bar',
+      timestamp: '',
+      assignedTo: ''
+    });
   };
 
   const openEditEmployeeModal = (employee) => {
@@ -301,6 +490,13 @@ function App() {
   const filteredTasks = filterSection === 'all' 
     ? tasks 
     : tasks.filter(task => task.section.toLowerCase() === filterSection.toLowerCase());
+
+  // Group tasks by status
+  const tasksByStatus = {
+    'pending': tasks.filter(task => task.status === 'pending'),
+    'in-progress': tasks.filter(task => task.status === 'in-progress'),
+    'completed': tasks.filter(task => task.status === 'completed')
+  };
 
   const getSuggestedAssignments = (roleName) => {
     // Suggest based on skills and performance
@@ -500,7 +696,8 @@ function App() {
                     
                     {understaffed && (
                       <div className="understaffed-warning">
-                        ⚠️ Need {required - current} more
+                        <span className="warning-icon">⚠️</span>
+                        <span>Need {required - current} more</span>
                       </div>
                     )}
                     
@@ -541,6 +738,14 @@ function App() {
                           </div>
                         </div>
                       ))}
+                      
+                      {/* Add employee button for this role */}
+                      <button 
+                        className="add-employee-to-role-btn"
+                        onClick={() => openAddEmployeeToRoleModal(roleName)}
+                      >
+                        + Add employee
+                      </button>
                     </div>
                   </div>
                 );
@@ -554,7 +759,7 @@ function App() {
                   className="add-employee-btn"
                   onClick={openAddEmployeeModal}
                 >
-                  + Add Employee
+                  + Add New Employee
                 </button>
               </div>
               <div 
@@ -673,6 +878,54 @@ function App() {
                 </div>
               </>
             )}
+
+            {/* Add Employee to Role Modal */}
+            {showRoleEmployeeModal && (
+              <>
+                <div className="modal-overlay" onClick={() => {
+                  setShowRoleEmployeeModal(null);
+                  setSelectedEmployeeForRole('');
+                }}></div>
+                <div className="modal employee-to-role-modal">
+                  <div className="modal-header">
+                    <h3>Add New Employee</h3>
+                  </div>
+                  <div className="modal-body">
+                    <label className="input-label">Employee List</label>
+                    <select 
+                      className="employee-select"
+                      value={selectedEmployeeForRole}
+                      onChange={(e) => setSelectedEmployeeForRole(e.target.value)}
+                    >
+                      <option value=""></option>
+                      {availableStaff.map(emp => (
+                        <option key={emp.id} value={emp.name}>
+                          {emp.name} {emp.skills.includes(showRoleEmployeeModal) ? '✓' : ''} ({emp.performance}★)
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+                  <div className="modal-footer">
+                    <button 
+                      className="modal-cancel-btn"
+                      onClick={() => {
+                        setShowRoleEmployeeModal(null);
+                        setSelectedEmployeeForRole('');
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="modal-confirm-btn"
+                      onClick={addEmployeeToRole}
+                      disabled={!selectedEmployeeForRole}
+                    >
+                      Add Employee
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
           </div>
         )}
 
@@ -680,91 +933,475 @@ function App() {
           <div className="tasks-view">
             <div className="content-header">
               <h2 className="content-title">Task Monitor</h2>
-              <div className="task-filters">
+              <div className="view-mode-toggle">
                 <button 
-                  className={`filter-btn ${filterSection === 'all' ? 'active' : ''}`}
-                  onClick={() => setFilterSection('all')}
+                  className={`mode-btn ${taskViewMode === 'section' ? 'active' : ''}`}
+                  onClick={() => setTaskViewMode('section')}
                 >
-                  All
+                  By Section
                 </button>
                 <button 
-                  className={`filter-btn ${filterSection === 'bar' ? 'active' : ''}`}
-                  onClick={() => setFilterSection('bar')}
+                  className={`mode-btn ${taskViewMode === 'status' ? 'active' : ''}`}
+                  onClick={() => setTaskViewMode('status')}
                 >
-                  Bar
-                </button>
-                <button 
-                  className={`filter-btn ${filterSection === 'dining' ? 'active' : ''}`}
-                  onClick={() => setFilterSection('dining')}
-                >
-                  Dining
-                </button>
-                <button 
-                  className={`filter-btn ${filterSection === 'kitchen' ? 'active' : ''}`}
-                  onClick={() => setFilterSection('kitchen')}
-                >
-                  Kitchen
-                </button>
-                <button 
-                  className={`filter-btn ${filterSection === 'outdoor' ? 'active' : ''}`}
-                  onClick={() => setFilterSection('outdoor')}
-                >
-                  Outdoor
+                  By Status
                 </button>
               </div>
             </div>
 
-            <div className="tasks-grid">
-              {filteredTasks.map(task => (
-                <div key={task.id} className="task-card" style={{ borderLeftColor: getTaskStatusColor(task.status) }}>
-                  <div className="task-header">
-                    <h4 className="task-title">{task.title}</h4>
-                    <span className="task-section">{task.section}</span>
-                  </div>
-                  
-                  <div className="task-meta">
-                    <span className="task-time">⏰ {task.timestamp}</span>
-                    {task.assignedTo && (
-                      <span className="task-assigned">👤 {task.assignedTo}</span>
-                    )}
-                  </div>
+            {taskViewMode === 'section' ? (
+              <>
+                <div className="task-filters">
+                  <button 
+                    className={`filter-btn ${filterSection === 'all' ? 'active' : ''}`}
+                    onClick={() => setFilterSection('all')}
+                  >
+                    All
+                  </button>
+                  <button 
+                    className={`filter-btn ${filterSection === 'bar' ? 'active' : ''}`}
+                    onClick={() => setFilterSection('bar')}
+                  >
+                    Bar
+                  </button>
+                  <button 
+                    className={`filter-btn ${filterSection === 'dining' ? 'active' : ''}`}
+                    onClick={() => setFilterSection('dining')}
+                  >
+                    Dining
+                  </button>
+                  <button 
+                    className={`filter-btn ${filterSection === 'kitchen' ? 'active' : ''}`}
+                    onClick={() => setFilterSection('kitchen')}
+                  >
+                    Kitchen
+                  </button>
+                  <button 
+                    className={`filter-btn ${filterSection === 'outdoor' ? 'active' : ''}`}
+                    onClick={() => setFilterSection('outdoor')}
+                  >
+                    Outdoor
+                  </button>
+                </div>
 
-                  <div className="task-status-controls">
-                    <select 
-                      value={task.status}
-                      onChange={(e) => updateTaskStatus(task.id, e.target.value)}
-                      className="status-select"
-                      style={{ borderColor: getTaskStatusColor(task.status) }}
+                <div className="tasks-grid">
+                  {filteredTasks.map(task => (
+                    <div key={task.id} className="task-card" style={{ borderLeftColor: getTaskStatusColor(task.status) }}>
+                      <div className="task-header">
+                        <h4 className="task-title">{task.title}</h4>
+                        <span className="task-section">{task.section}</span>
+                      </div>
+                      
+                      <div className="task-meta">
+                        <span className="task-time">⏰ {task.timestamp}</span>
+                        {task.assignedTo && (
+                          <span className="task-assigned">👤 {task.assignedTo}</span>
+                        )}
+                      </div>
+
+                      <div className="task-status-controls">
+                        <select 
+                          value={task.status}
+                          onChange={(e) => updateTaskStatus(task.id, e.target.value)}
+                          className="status-select"
+                          style={{ borderColor: getTaskStatusColor(task.status) }}
+                        >
+                          <option value="pending">Pending</option>
+                          <option value="in-progress">In Progress</option>
+                          <option value="completed">Completed</option>
+                        </select>
+
+                        {task.status === 'completed' && (
+                          <button className="verify-btn">
+                            ✓ Verify
+                          </button>
+                        )}
+                      </div>
+
+                      {!task.assignedTo && (
+                        <select 
+                          className="assign-select"
+                          onChange={(e) => assignTaskToStaff(task.id, e.target.value)}
+                          defaultValue=""
+                        >
+                          <option value="" disabled>Assign to staff...</option>
+                          {initialEmployees.map(emp => (
+                            <option key={emp.id} value={emp.name}>{emp.name}</option>
+                          ))}
+                        </select>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </>
+            ) : (
+              <div className="task-status-board">
+                {/* Pending Column */}
+                <div 
+                  className="status-column pending-column"
+                  onDragOver={handleTaskDragOver}
+                  onDrop={(e) => handleTaskDrop(e, 'pending')}
+                >
+                  <div className="status-column-header">
+                    <h3 className="status-column-title">
+                      <span className="status-icon">⏳</span>
+                      Pending
+                    </h3>
+                    <span className="task-count">{tasksByStatus['pending'].length}</span>
+                  </div>
+                  <div className="status-column-tasks">
+                    {tasksByStatus['pending'].map(task => (
+                      <div 
+                        key={task.id} 
+                        className="task-card-mini"
+                        draggable
+                        onDragStart={(e) => handleTaskDragStart(e, task)}
+                      >
+                        <div className="task-card-header">
+                          <h4 className="task-title-mini">{task.title}</h4>
+                          <span className="task-section-badge">{task.section}</span>
+                        </div>
+                        <div className="task-meta-mini">
+                          <span className="task-time-mini">⏰ {task.timestamp}</span>
+                          {task.assignedTo && (
+                            <span className="task-assigned-mini">👤 {task.assignedTo}</span>
+                          )}
+                        </div>
+                        
+                        {/* Display manager feedback if task was rejected */}
+                        {task.feedback && (
+                          <div className="task-feedback-display">
+                            <div className="feedback-header">
+                              <span className="feedback-icon">💬</span>
+                              <span className="feedback-label">Manager Feedback</span>
+                            </div>
+                            <p className="feedback-text">{task.feedback}</p>
+                            {task.feedbackTimestamp && (
+                              <span className="feedback-timestamp">{task.feedbackTimestamp}</span>
+                            )}
+                          </div>
+                        )}
+
+                        <button 
+                          className="task-action-btn progress-btn"
+                          onClick={() => updateTaskStatus(task.id, 'in-progress')}
+                        >
+                          Start Task →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* In Progress Column */}
+                <div 
+                  className="status-column progress-column"
+                  onDragOver={handleTaskDragOver}
+                  onDrop={(e) => handleTaskDrop(e, 'in-progress')}
+                >
+                  <div className="status-column-header">
+                    <h3 className="status-column-title">
+                      <span className="status-icon">⚙️</span>
+                      In Progress
+                    </h3>
+                    <span className="task-count">{tasksByStatus['in-progress'].length}</span>
+                  </div>
+                  <div className="status-column-tasks">
+                    {tasksByStatus['in-progress'].map(task => (
+                      <div 
+                        key={task.id} 
+                        className="task-card-mini"
+                        draggable
+                        onDragStart={(e) => handleTaskDragStart(e, task)}
+                      >
+                        <div className="task-card-header">
+                          <h4 className="task-title-mini">{task.title}</h4>
+                          <span className="task-section-badge">{task.section}</span>
+                        </div>
+                        <div className="task-meta-mini">
+                          <span className="task-time-mini">⏰ {task.timestamp}</span>
+                          {task.assignedTo && (
+                            <span className="task-assigned-mini">👤 {task.assignedTo}</span>
+                          )}
+                        </div>
+                        
+                        {/* Image upload section */}
+                        <div className="image-upload-section">
+                          <label className="upload-label">
+                            {task.photo ? (
+                              <div className="photo-preview">
+                                <img src={task.photo} alt="Task verification" className="task-photo" />
+                                <span className="photo-uploaded">✓ Photo Uploaded</span>
+                              </div>
+                            ) : (
+                              <>
+                                <span className="upload-icon">📷</span>
+                                <span>Upload Photo</span>
+                                <input 
+                                  type="file" 
+                                  accept="image/*"
+                                  onChange={(e) => handleImageUpload(e, task.id)}
+                                  className="file-input"
+                                />
+                              </>
+                            )}
+                          </label>
+                        </div>
+
+                        <button 
+                          className="task-action-btn complete-btn"
+                          onClick={() => openVerificationModal(task)}
+                          disabled={!task.photo}
+                        >
+                          Submit for Approval →
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* Completed Column */}
+                <div 
+                  className="status-column completed-column"
+                  onDragOver={handleTaskDragOver}
+                  onDrop={(e) => handleTaskDrop(e, 'completed')}
+                >
+                  <div className="status-column-header">
+                    <h3 className="status-column-title">
+                      <span className="status-icon">✅</span>
+                      Completed
+                    </h3>
+                    <span className="task-count">{tasksByStatus['completed'].length}</span>
+                  </div>
+                  <div className="status-column-tasks">
+                    {tasksByStatus['completed'].map(task => (
+                      <div key={task.id} className="task-card-mini completed">
+                        <div className="task-card-header">
+                          <h4 className="task-title-mini">{task.title}</h4>
+                          <span className="task-section-badge">{task.section}</span>
+                        </div>
+                        <div className="task-meta-mini">
+                          <span className="task-time-mini">⏰ {task.timestamp}</span>
+                          {task.assignedTo && (
+                            <span className="task-assigned-mini">👤 {task.assignedTo}</span>
+                          )}
+                        </div>
+                        {task.photo && (
+                          <div className="completed-photo-preview">
+                            <img src={task.photo} alt="Completed task" className="completed-task-photo" />
+                          </div>
+                        )}
+                        <div className="task-action-btn verify-btn-mini">
+                          ✓ Verified
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            )}
+
+            <button className="add-task-btn" onClick={() => setShowAddTaskModal(true)}>+ Add New Task</button>
+
+            {/* Verification Modal */}
+            {showVerificationModal && taskToVerify && (
+              <>
+                <div className="modal-overlay" onClick={() => {
+                  setShowVerificationModal(false);
+                  setTaskToVerify(null);
+                }}></div>
+                <div className="modal verification-modal">
+                  <div className="modal-header">
+                    <h3>Verify Task Completion</h3>
+                  </div>
+                  <div className="modal-body">
+                    <div className="verification-task-info">
+                      <h4 className="verification-task-title">{taskToVerify.title}</h4>
+                      <p className="verification-task-meta">
+                        <span>📍 {taskToVerify.section}</span>
+                        <span>⏰ {taskToVerify.timestamp}</span>
+                        {taskToVerify.assignedTo && <span>👤 {taskToVerify.assignedTo}</span>}
+                      </p>
+                    </div>
+                    
+                    {taskToVerify.photo && (
+                      <div className="verification-photo-container">
+                        <label className="input-label">Submitted Photo:</label>
+                        <img src={taskToVerify.photo} alt="Task verification" className="verification-photo" />
+                      </div>
+                    )}
+                    
+                    <p className="verification-prompt">
+                      {taskToVerify.photo 
+                        ? "Review the submitted photo and approve or reject the task completion."
+                        : "This task needs a photo to be submitted before it can be verified."}
+                    </p>
+                  </div>
+                  <div className="modal-footer verification-footer">
+                    <button 
+                      className="modal-cancel-btn"
+                      onClick={() => {
+                        setShowVerificationModal(false);
+                        setTaskToVerify(null);
+                      }}
                     >
-                      <option value="pending">Pending</option>
-                      <option value="in-progress">In Progress</option>
-                      <option value="completed">Completed</option>
+                      Cancel
+                    </button>
+                    <button 
+                      className="modal-reject-btn"
+                      onClick={rejectTaskVerification}
+                      disabled={!taskToVerify.photo}
+                    >
+                      ✗ Reject
+                    </button>
+                    <button 
+                      className="modal-confirm-btn"
+                      onClick={approveTaskVerification}
+                      disabled={!taskToVerify.photo}
+                    >
+                      ✓ Approve
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Manager Feedback Modal */}
+            {showFeedbackModal && taskToVerify && (
+              <>
+                <div className="modal-overlay" onClick={() => {
+                  setShowFeedbackModal(false);
+                  setTaskToVerify(null);
+                  setManagerFeedback('');
+                }}></div>
+                <div className="modal feedback-modal">
+                  <div className="modal-header">
+                    <h3>Manager Feedback</h3>
+                  </div>
+                  <div className="modal-body">
+                    <div className="feedback-task-info">
+                      <p className="feedback-context">You are rejecting:</p>
+                      <h4 className="feedback-task-title">{taskToVerify.title}</h4>
+                      <p className="feedback-task-details">
+                        <span>📍 {taskToVerify.section}</span>
+                        {taskToVerify.assignedTo && <span> • 👤 {taskToVerify.assignedTo}</span>}
+                      </p>
+                    </div>
+                    
+                    <label className="input-label">Feedback / Reason for Rejection</label>
+                    <textarea 
+                      value={managerFeedback}
+                      onChange={(e) => setManagerFeedback(e.target.value)}
+                      placeholder="Provide feedback on what needs to be corrected or redone..."
+                      className="feedback-textarea"
+                      rows="6"
+                      autoFocus
+                    />
+                    
+                    <p className="feedback-note">
+                      💡 This feedback will be visible to the staff member so they know what to improve.
+                    </p>
+                  </div>
+                  <div className="modal-footer">
+                    <button 
+                      className="modal-cancel-btn"
+                      onClick={() => {
+                        setShowFeedbackModal(false);
+                        setTaskToVerify(null);
+                        setManagerFeedback('');
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="modal-confirm-btn modal-reject-confirm"
+                      onClick={submitRejectionWithFeedback}
+                      disabled={!managerFeedback.trim()}
+                    >
+                      Submit & Reject Task
+                    </button>
+                  </div>
+                </div>
+              </>
+            )}
+
+            {/* Add Task Modal */}
+            {showAddTaskModal && (
+              <>
+                <div className="modal-overlay" onClick={() => setShowAddTaskModal(false)}></div>
+                <div className="modal add-task-modal">
+                  <div className="modal-header">
+                    <h3>Add New Task</h3>
+                  </div>
+                  <div className="modal-body">
+                    <label className="input-label">Task Title</label>
+                    <input 
+                      type="text"
+                      value={newTaskData.title}
+                      onChange={(e) => setNewTaskData({...newTaskData, title: e.target.value})}
+                      placeholder="Enter task title"
+                      className="modal-input"
+                      autoFocus
+                    />
+                    
+                    <label className="input-label">Section</label>
+                    <select 
+                      value={newTaskData.section}
+                      onChange={(e) => setNewTaskData({...newTaskData, section: e.target.value})}
+                      className="modal-select"
+                    >
+                      <option value="Bar">Bar</option>
+                      <option value="Dining">Dining</option>
+                      <option value="Kitchen">Kitchen</option>
+                      <option value="Outdoor">Outdoor</option>
                     </select>
 
-                    {task.status === 'completed' && (
-                      <button className="verify-btn">
-                        ✓ Verify
-                      </button>
-                    )}
-                  </div>
+                    <label className="input-label">Time</label>
+                    <input 
+                      type="time"
+                      value={newTaskData.timestamp}
+                      onChange={(e) => setNewTaskData({...newTaskData, timestamp: e.target.value})}
+                      className="modal-input"
+                    />
 
-                  {!task.assignedTo && (
+                    <label className="input-label">Assign To (Optional)</label>
                     <select 
-                      className="assign-select"
-                      onChange={(e) => assignTaskToStaff(task.id, e.target.value)}
-                      defaultValue=""
+                      value={newTaskData.assignedTo}
+                      onChange={(e) => setNewTaskData({...newTaskData, assignedTo: e.target.value})}
+                      className="modal-select"
                     >
-                      <option value="" disabled>Assign to staff...</option>
+                      <option value="">Unassigned</option>
                       {initialEmployees.map(emp => (
                         <option key={emp.id} value={emp.name}>{emp.name}</option>
                       ))}
                     </select>
-                  )}
+                  </div>
+                  <div className="modal-footer">
+                    <button 
+                      className="modal-cancel-btn"
+                      onClick={() => {
+                        setShowAddTaskModal(false);
+                        setNewTaskData({
+                          title: '',
+                          section: 'Bar',
+                          timestamp: '',
+                          assignedTo: ''
+                        });
+                      }}
+                    >
+                      Cancel
+                    </button>
+                    <button 
+                      className="modal-confirm-btn"
+                      onClick={addNewTask}
+                      disabled={!newTaskData.title.trim() || !newTaskData.timestamp}
+                    >
+                      Add Task
+                    </button>
+                  </div>
                 </div>
-              ))}
-            </div>
-
-            <button className="add-task-btn">+ Add New Task</button>
+              </>
+            )}
           </div>
         )}
       </div>
