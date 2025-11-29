@@ -2138,3 +2138,11 @@ html {
   background: #e0f2fe;
   color: #0369a1;
 }
+
+.status-pill {
+  padding: 4px 10px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  font-size: 12px;
+  font-weight: 500;
+}

@@ -16,11 +16,11 @@ const initialEmployees = [
 ];
 
 const initialTasks = [
-  { id: 1, title: 'Prep bar area', assignedTo: 'Bob', status: 'in-progress', section: 'Bar', timestamp: '18:30', photo: null },
+  { id: 1, title: 'Prep bar area', assignedTo: 'Bob', status: 'in-progress', section: 'Bar', timestamp: '18:30', photo: 'bar.jpg' },
   { id: 2, title: 'Check table 12 cleanup', assignedTo: 'Cathy', status: 'pending', section: 'Dining', timestamp: '18:45', photo: null },
-  { id: 3, title: 'Restock utensils', assignedTo: 'Alice', status: 'completed', section: 'Kitchen', timestamp: '18:15', photo: null },
+  { id: 3, title: 'Restock utensils', assignedTo: 'Alice', status: 'completed', section: 'Kitchen', timestamp: '18:15', photo: 'utensils.jpg' },
   { id: 4, title: 'Clean espresso machine', assignedTo: null, status: 'pending', section: 'Bar', timestamp: '19:00', photo: null },
-  { id: 5, title: 'Set up outdoor seating', assignedTo: 'Carol', status: 'in-progress', section: 'Outdoor', timestamp: '18:20', photo: null },
+  { id: 5, title: 'Set up outdoor seating', assignedTo: 'Carol', status: 'in-progress', section: 'Outdoor', timestamp: '18:20', photo: 'outdoor.jpg' },
 ];
 
 // Initial role capacities
@@ -83,6 +83,8 @@ function App() {
   });
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [managerFeedback, setManagerFeedback] = useState('');
+  const [showRepeatModal, setShowRepeatModal] = useState(false);
+  const [taskToRepeat, setTaskToRepeat] = useState(null);
   const [scheduleStatus, setScheduleStatus] = useState('draft'); // 'draft' | 'confirmed'
   const [changeSuggestions, setChangeSuggestions] = useState([]); // AI options for reallocation
 
@@ -423,14 +425,23 @@ function App() {
     e.preventDefault();
     if (!draggedTask) return;
 
-    // If moving to completed, require verification
-    if (newStatus === 'completed' && draggedTask.status !== 'completed') {
+    const fromStatus = draggedTask.status;
+
+    // Case 3: Completed → Tasks => ask to repeat task (duplicate)
+    if (fromStatus === 'completed' && newStatus === 'pending') {
+      setTaskToRepeat(draggedTask);
+      setShowRepeatModal(true);
+    }
+    // Case 1: Anything → Completed => require verification
+    else if (newStatus === 'completed' && fromStatus !== 'completed') {
       setTaskToVerify(draggedTask);
       setShowVerificationModal(true);
-    } else {
+    }
+    // All other moves: just update status directly
+    else {
       updateTaskStatus(draggedTask.id, newStatus);
     }
-    
+
     setDraggedTask(null);
   };
 
@@ -673,6 +684,21 @@ function App() {
       case 'pending': return '#f87171';
       default: return '#94a3b8';
     }
+  };
+
+  const getManagerStatus = (task) => {
+    // Completed is always completed
+    if (task.status === 'completed') {
+      return { key: 'completed', label: 'Completed' };
+    }
+
+    // Has a photo but not completed → Pending Approval
+    if (task.photo) {
+      return { key: 'in-progress', label: 'Pending Approval' };
+    }
+
+    // Default: no photo, not completed → Not Started
+    return { key: 'pending', label: 'Not Started' };
   };
 
   const filteredTasks = filterSection === 'all' 
@@ -1430,22 +1456,31 @@ function App() {
                       </div>
 
                       <div className="task-status-controls">
-                        <select 
-                          value={task.status}
-                          onChange={(e) => updateTaskStatus(task.id, e.target.value)}
-                          className="status-select"
-                          style={{ borderColor: getTaskStatusColor(task.status) }}
-                        >
-                          <option value="pending">Pending</option>
-                          <option value="in-progress">In Progress</option>
-                          <option value="completed">Completed</option>
-                        </select>
+                        {(() => {
+                          const { key, label } = getManagerStatus(task);
+                          const color = getTaskStatusColor(key);
 
-                        {task.status === 'completed' && (
-                          <button className="verify-btn">
-                            ✓ Verify
-                          </button>
-                        )}
+                          return (
+                            <>
+                              <span
+                                className="status-pill"
+                                style={{ borderColor: color, color }}
+                              >
+                                {label}
+                              </span>
+
+                              {/* Manager can only review when it's pending approval */}
+                              {key === 'in-progress' && task.photo && (
+                                <button
+                                  className="verify-btn"
+                                  onClick={() => openVerificationModal(task)}
+                                >
+                                  Review photo
+                                </button>
+                              )}
+                            </>
+                          );
+                        })()}
                       </div>
 
                       {!task.assignedTo && (
@@ -1474,8 +1509,8 @@ function App() {
                 >
                   <div className="status-column-header">
                     <h3 className="status-column-title">
-                      <span className="status-icon">⏳</span>
-                      Pending
+                      <span className="status-icon">📋</span>
+                      Not Started
                     </h3>
                     <span className="task-count">{tasksByStatus['pending'].length}</span>
                   </div>
@@ -1531,8 +1566,8 @@ function App() {
                 >
                   <div className="status-column-header">
                     <h3 className="status-column-title">
-                      <span className="status-icon">⚙️</span>
-                      In Progress
+                      <span className="status-icon">🔍</span>
+                      Pending Approval
                     </h3>
                     <span className="task-count">{tasksByStatus['in-progress'].length}</span>
                   </div>
@@ -1543,6 +1578,7 @@ function App() {
                         className="task-card-mini"
                         draggable
                         onDragStart={(e) => handleTaskDragStart(e, task)}
+                        onClick={() => openVerificationModal(task)}
                       >
                         <div className="task-card-header">
                           <h4 className="task-title-mini">{task.title}</h4>
@@ -1555,8 +1591,8 @@ function App() {
                           )}
                         </div>
                         
-                        {/* Image upload section */}
-                        <div className="image-upload-section">
+                        {/* Optional: keep upload so you can simulate staff attaching a photo */}
+                        <div className="image-upload-section" onClick={(e) => e.stopPropagation()}>
                           <label className="upload-label">
                             {task.photo ? (
                               <div className="photo-preview">
@@ -1580,10 +1616,13 @@ function App() {
 
                         <button 
                           className="task-action-btn complete-btn"
-                          onClick={() => openVerificationModal(task)}
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            openVerificationModal(task);
+                          }}
                           disabled={!task.photo}
                         >
-                          Submit for Approval →
+                          Review &amp; Verify →
                         </button>
                       </div>
                     ))}
@@ -1754,6 +1793,66 @@ function App() {
                 </div>
               </>
             )}
+
+            {/* Repeat Task Modal */}
+              {showRepeatModal && taskToRepeat && (
+                <>
+                  <div 
+                    className="modal-overlay"
+                    onClick={() => {
+                      setShowRepeatModal(false);
+                      setTaskToRepeat(null);
+                    }}
+                  ></div>
+                  <div className="modal repeat-task-modal">
+                    <div className="modal-header">
+                      <h3>Repeat Task?</h3>
+                    </div>
+                    <div className="modal-body">
+                      <p>
+                        A new copy of this task will be added to <strong>Tasks</strong> while keeping the completed record.
+                      </p>
+                      <div className="verification-task-info">
+                        <h4 className="verification-task-title">{taskToRepeat.title}</h4>
+                        <p className="verification-task-meta">
+                          <span>📍 {taskToRepeat.section}</span>
+                          {taskToRepeat.assignedTo && <span> • 👤 {taskToRepeat.assignedTo}</span>}
+                        </p>
+                      </div>
+                    </div>
+                    <div className="modal-footer">
+                      <button
+                        className="modal-cancel-btn"
+                        onClick={() => {
+                          setShowRepeatModal(false);
+                          setTaskToRepeat(null);
+                        }}
+                      >
+                        Cancel
+                      </button>
+                      <button
+                        className="modal-confirm-btn"
+                        onClick={() => {
+                          const newTask = {
+                            ...taskToRepeat,
+                            id: Date.now(),
+                            status: 'pending',
+                            photo: null,
+                            verified: false,
+                            feedback: undefined,
+                            feedbackTimestamp: undefined,
+                          };
+                          setTasks(prev => [...prev, newTask]);
+                          setShowRepeatModal(false);
+                          setTaskToRepeat(null);
+                        }}
+                      >
+                        Continue
+                      </button>
+                    </div>
+                  </div>
+                </>
+              )}
 
             {/* Add Task Modal */}
             {showAddTaskModal && (
