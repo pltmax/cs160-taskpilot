@@ -11,6 +11,8 @@ const initialEmployees = [
   { id: 6, name: 'Carol', skills: ['runner'], availability: true, performance: 4.7 },
   { id: 7, name: 'Mike', skills: ['server'], availability: true, performance: 4.4 },
   { id: 8, name: 'Sam', skills: ['dishwasher'], availability: true, performance: 4.1 },
+  { id: 9, name: 'Ethan', skills: ['server'], availability: true, performance: 4.2 },
+  { id: 10, name: 'Vivian', skills: ['server'], availability: true, performance: 4.5 },
 ];
 
 const initialTasks = [
@@ -81,30 +83,39 @@ function App() {
   });
   const [showFeedbackModal, setShowFeedbackModal] = useState(false);
   const [managerFeedback, setManagerFeedback] = useState('');
+  const [scheduleStatus, setScheduleStatus] = useState('draft'); // 'draft' | 'confirmed'
+  const [changeSuggestions, setChangeSuggestions] = useState([]); // AI options for reallocation
 
-  // Save current schedule whenever roles or availableStaff changes
+  // Save current schedule whenever schedule-related state changes
   useEffect(() => {
     const dateKey = getDateKey(selectedDate);
     setSchedulesByDate(prev => ({
       ...prev,
       [dateKey]: {
-        roles: roles,
-        availableStaff: availableStaff
+        roles,
+        availableStaff,
+        roleCapacity,
+        status: scheduleStatus,
       }
     }));
-  }, [roles, availableStaff, selectedDate]);
+  }, [roles, availableStaff, roleCapacity, scheduleStatus, selectedDate]);
 
   // Load schedule when date changes
   useEffect(() => {
     const dateKey = getDateKey(selectedDate);
     const savedSchedule = schedulesByDate[dateKey];
-    
+
     if (savedSchedule) {
-      // Load saved schedule for this date
-      setRoles(savedSchedule.roles);
-      setAvailableStaff(savedSchedule.availableStaff);
+      setRoles(savedSchedule.roles || {
+        bartender: [],
+        runner: [],
+        server: [],
+        dishwasher: []
+      });
+      setAvailableStaff(savedSchedule.availableStaff || initialEmployees);
+      setRoleCapacity(savedSchedule.roleCapacity || initialRoleCapacity);
+      setScheduleStatus(savedSchedule.status || 'draft');
     } else {
-      // Reset to initial state for new date
       setRoles({
         bartender: [],
         runner: [],
@@ -112,8 +123,185 @@ function App() {
         dishwasher: []
       });
       setAvailableStaff(initialEmployees);
+      setRoleCapacity(initialRoleCapacity);
+      setScheduleStatus('draft');
     }
+
+    // Clear any “what-if” options when switching dates
+    setChangeSuggestions([]);
   }, [selectedDate]);
+
+  useEffect(() => {
+    if (scheduleStatus !== 'confirmed') {
+      setChangeSuggestions([]);
+      return;
+    }
+
+    const newSuggestions = [];
+
+    Object.entries(roles).forEach(([roleName, employees]) => {
+      const required = roleCapacity[roleName] || 0;
+      const current = employees.length;
+      const deficit = required - current;
+
+      if (deficit <= 0) return;
+
+      // OPTION 1 – move best match from an overstaffed role (generic)
+      let bestReassign = null;
+
+      Object.entries(roles).forEach(([otherRole, otherEmployees]) => {
+        if (otherRole === roleName) return;
+
+        const otherRequired = roleCapacity[otherRole] || 0;
+        const surplus = otherEmployees.length - otherRequired;
+
+        if (surplus > 0) {
+          const candidates = otherEmployees
+            .filter(emp => emp.skills.includes(roleName))
+            .sort((a, b) => b.performance - a.performance);
+
+          if (candidates.length > 0) {
+            const candidate = candidates[0];
+            const suggestion = {
+              id: `reassign-${candidate.id}-${otherRole}-to-${roleName}`,
+              type: 'reassign',
+              employeeId: candidate.id,
+              employeeName: candidate.name,
+              fromRole: otherRole,
+              toRole: roleName,
+              description: `Move ${candidate.name} from ${otherRole} to ${roleName}.`,
+              tradeoff: `Service in ${otherRole} may slow down (e.g., +2 min on average per order).`,
+              createUrgentTask: true,
+            };
+
+            if (!bestReassign || candidate.performance > bestReassign.performance) {
+              bestReassign = suggestion;
+            }
+          }
+        }
+      });
+
+      if (bestReassign) {
+        newSuggestions.push(bestReassign);
+      }
+
+      // OPTION 2 – role-specific "split time" capacity reassignments
+
+      // Runner shortage: dishwasher helps as runner (your existing demo)
+      if (roleName === 'runner' && (roles.dishwasher?.length || 0) > 0) {
+        const dishwasherCandidates = roles.dishwasher
+          .slice()
+          .sort((a, b) => b.performance - a.performance);
+        const helper = dishwasherCandidates[0];
+
+        newSuggestions.push({
+          id: `dw-helper-runner-${helper.id}`,
+          type: 'capacityReassign',
+          employeeId: helper.id,
+          employeeName: helper.name,
+          fromRole: 'dishwasher',
+          toRole: roleName,
+          description: `Let ${helper.name} split time between dishwashing and ${roleName}.`,
+          tradeoff:
+            'Dishwashing capacity is limited (e.g., only ~50 sets of flatware can be turned over this service), so table resets may lag.',
+          createUrgentTask: true,
+          capacityImpactRole: 'dishwasher',
+          capacityDelta: -1,
+        });
+      }
+
+      // Bartender shortage: server helps bar
+      if (roleName === 'bartender' && (roles.server?.length || 0) > 0) {
+        const serverCandidates = roles.server
+          .slice()
+          .sort((a, b) => b.performance - a.performance);
+        const helper = serverCandidates[0];
+
+        newSuggestions.push({
+          id: `srv-helper-bartender-${helper.id}`,
+          type: 'capacityReassign',
+          employeeId: helper.id,
+          employeeName: helper.name,
+          fromRole: 'server',
+          toRole: roleName,
+          description: `Let ${helper.name} split time between serving tables and bartending.`,
+          tradeoff:
+            'Table service may slow slightly as one server is also helping on the bar.',
+          createUrgentTask: true,
+          capacityImpactRole: 'server',
+          capacityDelta: -1,
+        });
+      }
+
+      // Server shortage: runner helps serve
+      if (roleName === 'server' && (roles.runner?.length || 0) > 0) {
+        const runnerCandidates = roles.runner
+          .slice()
+          .sort((a, b) => b.performance - a.performance);
+        const helper = runnerCandidates[0];
+
+        newSuggestions.push({
+          id: `run-helper-server-${helper.id}`,
+          type: 'capacityReassign',
+          employeeId: helper.id,
+          employeeName: helper.name,
+          fromRole: 'runner',
+          toRole: roleName,
+          description: `Let ${helper.name} split time between running food and serving tables.`,
+          tradeoff:
+            'Food running to tables may lag slightly as one runner is also acting as a server.',
+          createUrgentTask: true,
+          capacityImpactRole: 'runner',
+          capacityDelta: -1,
+        });
+      }
+
+      // Dishwasher shortage: runner helps dishwashing
+      if (roleName === 'dishwasher' && (roles.runner?.length || 0) > 0) {
+        const runnerCandidates = roles.runner
+          .slice()
+          .sort((a, b) => b.performance - a.performance);
+        const helper = runnerCandidates[0];
+
+        newSuggestions.push({
+          id: `run-helper-dishwasher-${helper.id}`,
+          type: 'capacityReassign',
+          employeeId: helper.id,
+          employeeName: helper.name,
+          fromRole: 'runner',
+          toRole: roleName,
+          description: `Let ${helper.name} split time between running and dishwashing.`,
+          tradeoff:
+            'Table turns and resets may be slower because one runner is helping in the dish area.',
+          createUrgentTask: true,
+          capacityImpactRole: 'runner',
+          capacityDelta: -1,
+        });
+      }
+
+      // OPTION 3 – pull someone from the available pool (generic)
+      const availableCandidates = availableStaff
+        .filter(emp => emp.skills.includes(roleName))
+        .sort((a, b) => b.performance - a.performance);
+
+      if (availableCandidates.length > 0) {
+        const candidate = availableCandidates[0];
+
+        newSuggestions.push({
+          id: `assign-${candidate.id}-to-${roleName}`,
+          type: 'fromAvailable',
+          employeeId: candidate.id,
+          employeeName: candidate.name,
+          toRole: roleName,
+          description: `Call in ${candidate.name} from the standby list to cover ${roleName}.`,
+          tradeoff: 'No impact on other roles, but labor cost increases for this shift.',
+          createUrgentTask: true,
+        });
+      }
+    });
+
+    setChangeSuggestions(newSuggestions);
+  }, [roles, roleCapacity, availableStaff, scheduleStatus]);
 
   const handleDragStart = (e, employee) => {
     setDraggedEmployee(employee);
@@ -507,6 +695,170 @@ function App() {
     return suggested;
   };
 
+  const canConfirmShift = () => {
+    // All non-zero capacity roles must be fully staffed
+    return Object.keys(roleCapacity).every(roleName => {
+      const required = roleCapacity[roleName] || 0;
+      if (required === 0) return true;
+      const current = roles[roleName]?.length || 0;
+      return current >= required;
+    });
+  };
+
+  const confirmCurrentSchedule = () => {
+    if (!canConfirmShift()) {
+      alert('Please fill all required roles before confirming the shift.');
+      return;
+    }
+    setScheduleStatus('confirmed');
+    alert('Shift confirmed. From now on, changes will surface staffing recommendations for last-minute adjustments.');
+  };
+
+  const applySuggestion = (suggestion) => {
+    // 1) Remove this suggestion so it can't be applied twice
+    setChangeSuggestions(prev => prev.filter(s => s.id !== suggestion.id));
+
+    // 2) Helper to create a single urgent task per move with a custom title
+    const makeUrgentTask = (taskTitle, employeeName) => {
+      setTasks(prevTasks => {
+        // If an identical urgent task already exists, don't create another
+        const alreadyExists = prevTasks.some(t =>
+          t.title === taskTitle &&
+          t.assignedTo === employeeName &&
+          t.priority === 'urgent' &&
+          t.status === 'pending'
+        );
+
+        if (alreadyExists) return prevTasks;
+
+        const maxId = prevTasks.reduce((max, t) => Math.max(max, t.id), 0);
+        const now = new Date();
+        const timeLabel = now.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+
+        const newTask = {
+          id: maxId + 1,
+          title: taskTitle,
+          assignedTo: employeeName,
+          status: 'pending',
+          section: 'Shift Change',
+          timestamp: timeLabel,
+          photo: null,
+          priority: 'urgent',
+        };
+
+        return [...prevTasks, newTask];
+      });
+    };
+
+    if (suggestion.type === 'reassign') {
+      // FULL move: fromRole -> toRole
+      setRoles(prev => {
+        const fromList = prev[suggestion.fromRole] || [];
+        const toList = prev[suggestion.toRole] || [];
+        const employee = fromList.find(emp => emp.id === suggestion.employeeId);
+        if (!employee) return prev;
+
+        // Don't add if they're already in the target role
+        if (toList.some(emp => emp.id === employee.id)) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [suggestion.fromRole]: fromList.filter(emp => emp.id !== employee.id),
+          [suggestion.toRole]: [...toList, employee],
+        };
+      });
+
+      if (suggestion.createUrgentTask) {
+        makeUrgentTask(
+          `Cover ${suggestion.toRole} for this shift (moved from ${suggestion.fromRole})`,
+          suggestion.employeeName
+        );
+      }
+
+    } else if (suggestion.type === 'capacityReassign') {
+      // SPLIT move: keep in fromRole, ALSO show in toRole
+      setRoles(prev => {
+        const fromList = prev[suggestion.fromRole] || [];
+        const toList = prev[suggestion.toRole] || [];
+        const employee =
+          fromList.find(emp => emp.id === suggestion.employeeId) ||
+          toList.find(emp => emp.id === suggestion.employeeId); // fallback
+
+        if (!employee) return prev;
+
+        // If already in target role, no need to add again
+        if (toList.some(emp => emp.id === employee.id)) {
+          return prev;
+        }
+
+        return {
+          ...prev,
+          [suggestion.fromRole]: fromList, // keep them here
+          [suggestion.toRole]: [...toList, employee],
+        };
+      });
+
+      // Generic capacity impact for split-time options
+      if (suggestion.capacityImpactRole) {
+        setRoleCapacity(prevCap => {
+          const role = suggestion.capacityImpactRole;
+          const delta = suggestion.capacityDelta ?? -1;
+          const current = prevCap[role] ?? 0;
+          return {
+            ...prevCap,
+            [role]: Math.max(current + delta, 0),
+          };
+        });
+      }
+
+      if (suggestion.createUrgentTask) {
+        makeUrgentTask(
+          `Split shift: help ${suggestion.toRole} while staying on ${suggestion.fromRole}`,
+          suggestion.employeeName
+        );
+      }
+
+    } else if (suggestion.type === 'fromAvailable') {
+      setAvailableStaff(prevAvail => {
+        const employee = prevAvail.find(emp => emp.id === suggestion.employeeId);
+        if (!employee) return prevAvail;
+
+        setRoles(prevRoles => {
+          const toList = prevRoles[suggestion.toRole] || [];
+
+          // Avoid duplicating employee in target role
+          if (toList.some(emp => emp.id === employee.id)) {
+            return prevRoles;
+          }
+
+          return {
+            ...prevRoles,
+            [suggestion.toRole]: [...toList, employee],
+          };
+        });
+
+        if (suggestion.createUrgentTask) {
+          makeUrgentTask(
+            `Cover ${suggestion.toRole} (called in from standby)`,
+            suggestion.employeeName
+          );
+        }
+
+        // Remove from available list
+        return prevAvail.filter(emp => emp.id !== suggestion.employeeId);
+      });
+    }
+  };
+
+  const splitCounts = {};
+  Object.values(roles).forEach(list => {
+    list.forEach(emp => {
+      splitCounts[emp.id] = (splitCounts[emp.id] || 0) + 1;
+    });
+  });
+
   return (
     <div className="App">
       <div className="sidebar">
@@ -541,47 +893,73 @@ function App() {
         {currentView === 'scheduling' && (
           <div className="scheduling-view">
             <div className="content-header">
-              <h2 className="content-title">Schedule Upcoming Shift</h2>
-              <div className="date-controls">
-                <button 
-                  className="date-badge calendar-trigger"
-                  onClick={() => setShowCalendar(!showCalendar)}
+              <div className="content-header-left">
+                <h2 className="content-title">Schedule Upcoming Shift</h2>
+                <p className="content-subtitle">
+                  Confirm this schedule before the shift. Once confirmed, any changes become live staffing adjustments.
+                </p>
+                <span className={`shift-status-pill ${scheduleStatus}`}>
+                  {scheduleStatus === 'draft' ? 'Draft schedule' : 'Live mode: Shift Assist active'}
+                </span>
+              </div>
+
+              <div className="header-actions">
+                <div className="date-controls">
+                  <button 
+                    className="date-badge calendar-trigger"
+                    onClick={() => setShowCalendar(!showCalendar)}
+                  >
+                    <span className="calendar-icon">📅</span>
+                    {formatDate(selectedDate)}
+                  </button>
+                  {showCalendar && (
+                    <div className="calendar-dropdown">
+                      <div className="calendar-header">
+                        <button onClick={() => changeMonth(-1)} className="calendar-nav">‹</button>
+                        <span className="calendar-month">
+                          {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
+                        </span>
+                        <button onClick={() => changeMonth(1)} className="calendar-nav">›</button>
+                      </div>
+                      <div className="calendar-grid">
+                        <div className="calendar-day-header">Sun</div>
+                        <div className="calendar-day-header">Mon</div>
+                        <div className="calendar-day-header">Tue</div>
+                        <div className="calendar-day-header">Wed</div>
+                        <div className="calendar-day-header">Thu</div>
+                        <div className="calendar-day-header">Fri</div>
+                        <div className="calendar-day-header">Sat</div>
+                        {generateCalendar().map((date, index) => (
+                          <button
+                            key={index}
+                            className={`calendar-day ${!date ? 'empty' : ''} ${
+                              date && date.toDateString() === selectedDate.toDateString() ? 'selected' : ''
+                            } ${date && date.toDateString() === new Date().toDateString() ? 'today' : ''}`}
+                            onClick={() => date && selectDate(date)}
+                            disabled={!date}
+                          >
+                            {date ? date.getDate() : ''}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                <button
+                  className="confirm-shift-btn"
+                  onClick={confirmCurrentSchedule}
+                  disabled={scheduleStatus === 'confirmed' || !canConfirmShift()}
                 >
-                  <span className="calendar-icon">📅</span>
-                  {formatDate(selectedDate)}
+                  <span className="confirm-main-text">
+                    {scheduleStatus === 'confirmed' ? 'Shift locked' : 'Confirm schedule'}
+                  </span>
+                  <span className="confirm-sub-text">
+                    {scheduleStatus === 'confirmed'
+                      ? 'Editing now triggers Shift Assist recommendations.'
+                      : 'Lock baseline & enable Shift Assist for last-minute changes.'}
+                  </span>
                 </button>
-                {showCalendar && (
-                  <div className="calendar-dropdown">
-                    <div className="calendar-header">
-                      <button onClick={() => changeMonth(-1)} className="calendar-nav">‹</button>
-                      <span className="calendar-month">
-                        {selectedDate.toLocaleDateString('en-US', { month: 'long', year: 'numeric' })}
-                      </span>
-                      <button onClick={() => changeMonth(1)} className="calendar-nav">›</button>
-                    </div>
-                    <div className="calendar-grid">
-                      <div className="calendar-day-header">Sun</div>
-                      <div className="calendar-day-header">Mon</div>
-                      <div className="calendar-day-header">Tue</div>
-                      <div className="calendar-day-header">Wed</div>
-                      <div className="calendar-day-header">Thu</div>
-                      <div className="calendar-day-header">Fri</div>
-                      <div className="calendar-day-header">Sat</div>
-                      {generateCalendar().map((date, index) => (
-                        <button
-                          key={index}
-                          className={`calendar-day ${!date ? 'empty' : ''} ${
-                            date && date.toDateString() === selectedDate.toDateString() ? 'selected' : ''
-                          } ${date && date.toDateString() === new Date().toDateString() ? 'today' : ''}`}
-                          onClick={() => date && selectDate(date)}
-                          disabled={!date}
-                        >
-                          {date ? date.getDate() : ''}
-                        </button>
-                      ))}
-                    </div>
-                  </div>
-                )}
               </div>
             </div>
 
@@ -713,31 +1091,38 @@ function App() {
                     )}
 
                     <div className="employees-list">
-                      {employees.map(employee => (
-                        <div 
-                          key={employee.id}
-                          className="employee-card assigned"
-                          draggable
-                          onDragStart={(e) => handleDragStart(e, employee)}
-                        >
-                          <span className="employee-name">{employee.name}</span>
-                          <div className="employee-meta">
-                            <span className="performance-badge">{employee.performance}★</span>
-                            <button 
-                              className="remove-btn"
-                              onClick={() => {
-                                setAvailableStaff(prev => [...prev, employee]);
-                                setRoles(prev => ({
-                                  ...prev,
-                                  [roleName]: prev[roleName].filter(emp => emp.id !== employee.id)
-                                }));
-                              }}
-                            >
-                              ×
-                            </button>
+                      {employees.map(employee => {
+                        const isSplit = (splitCounts[employee.id] || 0) > 1;
+
+                        return (
+                          <div 
+                            key={employee.id}
+                            className="employee-card assigned"
+                            draggable
+                            onDragStart={(e) => handleDragStart(e, employee)}
+                          >
+                            <div className="employee-card-top">
+                              <span className="employee-name">{employee.name}</span>
+                              {isSplit && <span className="split-badge">Split shift</span>}
+                            </div>
+                            <div className="employee-meta">
+                              <span className="performance-badge">{employee.performance}★</span>
+                              <button 
+                                className="remove-btn"
+                                onClick={() => {
+                                  setAvailableStaff(prev => [...prev, employee]);
+                                  setRoles(prev => ({
+                                    ...prev,
+                                    [roleName]: prev[roleName].filter(emp => emp.id !== employee.id)
+                                  }));
+                                }}
+                              >
+                                ×
+                              </button>
+                            </div>
                           </div>
-                        </div>
-                      ))}
+                        );
+                      })}
                       
                       {/* Add employee button for this role */}
                       <button 
@@ -751,6 +1136,46 @@ function App() {
                 );
               })}
             </div>
+
+            {scheduleStatus === 'confirmed' && (
+              <div className="ai-suggestions-panel">
+                <div className="ai-suggestions-header">
+                  <h3>Dynamic Staffing Recommendations</h3>
+                  <p className="ai-suggestions-subtitle">
+                    When someone calls out or demand spikes, choose an option below to rebalance coverage.
+                  </p>
+                </div>
+
+                {changeSuggestions.length === 0 ? (
+                  <div className="ai-suggestion-card ok">
+                    <span className="ai-suggestion-icon">✅</span>
+                    <div>
+                      <div className="ai-suggestion-title">All roles fully covered</div>
+                      <div className="ai-suggestion-text">
+                        No staffing gaps detected. If a staff member becomes unavailable, edits to the schedule
+                        will trigger fresh suggestions here.
+                      </div>
+                    </div>
+                  </div>
+                ) : (
+                  changeSuggestions.map((sug, index) => (
+                    <div key={sug.id} className="ai-suggestion-card">
+                      <span className="ai-suggestion-option-label">Option {index + 1}</span>
+                      <div className="ai-suggestion-content">
+                        <div className="ai-suggestion-title">{sug.description}</div>
+                        <div className="ai-suggestion-text">{sug.tradeoff}</div>
+                      </div>
+                      <button
+                        className="apply-suggestion-btn"
+                        onClick={() => applySuggestion(sug)}
+                      >
+                        Apply & create urgent task
+                      </button>
+                    </div>
+                  ))
+                )}
+              </div>
+            )}
 
             <div className="available-section">
               <div className="section-header-with-button">
@@ -989,7 +1414,12 @@ function App() {
                     <div key={task.id} className="task-card" style={{ borderLeftColor: getTaskStatusColor(task.status) }}>
                       <div className="task-header">
                         <h4 className="task-title">{task.title}</h4>
-                        <span className="task-section">{task.section}</span>
+                        <div className="task-header-right">
+                          {task.priority === 'urgent' && (
+                            <span className="task-chip urgent">Urgent</span>
+                          )}
+                          <span className="task-section">{task.section}</span>
+                        </div>
                       </div>
                       
                       <div className="task-meta">
