@@ -3,16 +3,86 @@ import './App.css';
 
 // Initial data
 const initialEmployees = [
-  { id: 1, name: 'Bob', skills: ['bartender'], availability: true, performance: 4.5 },
-  { id: 2, name: 'Linda', skills: ['bartender'], availability: true, performance: 4.2 },
-  { id: 3, name: 'Cathy', skills: ['runner'], availability: true, performance: 4.8 },
-  { id: 4, name: 'Alice', skills: ['runner', 'server'], availability: true, performance: 4.6 },
-  { id: 5, name: 'Elissa', skills: ['runner'], availability: true, performance: 4.3 },
-  { id: 6, name: 'Carol', skills: ['runner'], availability: true, performance: 4.7 },
-  { id: 7, name: 'Mike', skills: ['server'], availability: true, performance: 4.4 },
-  { id: 8, name: 'Sam', skills: ['dishwasher'], availability: true, performance: 4.1 },
-  { id: 9, name: 'Ethan', skills: ['server'], availability: true, performance: 4.2 },
-  { id: 10, name: 'Vivian', skills: ['server'], availability: true, performance: 4.5 },
+  { 
+    id: 1, 
+    name: 'Bob', 
+    skills: ['bartender'], 
+    availability: true, 
+    performance: 4.8,
+    notes: 'Anchors the Friday/Saturday bar rush. Keeps wells organized, tickets moving quickly, and remembers regulars by name. Occasionally needs a reminder to log 86’d items in the POS, but guest experience scores stay consistently high.'
+  },
+  { 
+    id: 2, 
+    name: 'Linda', 
+    skills: ['bartender'], 
+    availability: true, 
+    performance: 4.3,
+    notes: 'Reliable opener who keeps bar prep ahead of the curve. Strong wine and spirits knowledge and double-checks orders before sending. Can be a bit cautious during peak cocktail volume, but accuracy is excellent and guest complaints are rare.'
+  },
+  { 
+    id: 3, 
+    name: 'Cathy', 
+    skills: ['runner'], 
+    availability: true, 
+    performance: 4.9,
+    notes: 'Fastest food runner on the team. Tickets almost never sit in the window and hot food goes out at the right temp. Frequently jumps in to help bussers without being asked. Needs mild coaching on pacing breaks to avoid burnout during double turns.'
+  },
+  { 
+    id: 4, 
+    name: 'Alice', 
+    skills: ['runner', 'server'], 
+    availability: true, 
+    performance: 4.6,
+    notes: 'Strong hybrid runner/server who calmly handles high-pressure sections. Great at teaching newer staff expo and ticket reading. Double-checks modifiers, which can slow her down slightly, but dramatically reduces comps and remakes.'
+  },
+  { 
+    id: 5, 
+    name: 'Elissa', 
+    skills: ['runner'], 
+    availability: true, 
+    performance: 4.2,
+    notes: 'Dependable mid-shift runner who keeps side stations stocked and communicates clearly with servers. Occasionally misses a garnish or extra side when the board is packed, but corrects quickly after feedback and shows steady improvement each week.'
+  },
+  { 
+    id: 6, 
+    name: 'Carol', 
+    skills: ['runner'], 
+    availability: true, 
+    performance: 4.7,
+    notes: 'High-energy runner who is especially strong on busy patio nights. Reads the room well and prioritizes kids’ food and hot plates. Sometimes takes on too many tables at once, so gentle reminders to delegate bussing tasks help maintain pace.'
+  },
+  { 
+    id: 7, 
+    name: 'Mike', 
+    skills: ['server'], 
+    availability: true, 
+    performance: 4.4,
+    notes: 'Guest-facing server with great table-side presence and strong upsell instincts on appetizers and desserts. Ticket times are usually on target. Needs occasional coaching on using pre-shifts to review specials before service to avoid last-minute questions.'
+  },
+  { 
+    id: 8, 
+    name: 'Sam', 
+    skills: ['dishwasher'], 
+    availability: true, 
+    performance: 4.1,
+    notes: 'Steady dishwasher who keeps the dish pit under control even when the dining room is full. Rack organization is improving and glassware breakage is low. Can fall slightly behind when large parties turn over at once, but recovers quickly with clear priorities.'
+  },
+  { 
+    id: 9, 
+    name: 'Ethan', 
+    skills: ['server'], 
+    availability: true, 
+    performance: 4.3,
+    notes: 'Calm, detail-oriented server who rarely misrings orders. Guests appreciate his clear explanations of menu changes. Could project more confidence when handling comps or difficult guests, but always escalates appropriately to the manager when needed.'
+  },
+  { 
+    id: 10, 
+    name: 'Vivian', 
+    skills: ['server'], 
+    availability: true, 
+    performance: 4.7,
+    notes: 'Consistently one of the top tip earners. Manages large sections without sacrificing hospitality and maintains strong sales on specials and add-ons. Occasionally stretches herself thin by taking extra tables, but still keeps ticket error rate extremely low.'
+  },
 ];
 
 const initialTasks = [
@@ -87,6 +157,27 @@ function App() {
   const [taskToRepeat, setTaskToRepeat] = useState(null);
   const [scheduleStatus, setScheduleStatus] = useState('draft'); // 'draft' | 'confirmed'
   const [changeSuggestions, setChangeSuggestions] = useState([]); // AI options for reallocation
+
+  // Keep performance + notes in sync across available staff and all roles
+  const updateEmployeePerformanceFields = (employeeId, changes) => {
+    // Update in available staff
+    setAvailableStaff(prev =>
+      prev.map(emp =>
+        emp.id === employeeId ? { ...emp, ...changes } : emp
+      )
+    );
+
+    // Update in any roles where the employee is scheduled
+    setRoles(prev => {
+      const newRoles = {};
+      Object.keys(prev).forEach(role => {
+        newRoles[role] = prev[role].map(emp =>
+          emp.id === employeeId ? { ...emp, ...changes } : emp
+        );
+      });
+      return newRoles;
+    });
+  };
 
   // Save current schedule whenever schedule-related state changes
   useEffect(() => {
@@ -571,7 +662,8 @@ function App() {
         name: employeeFormData.name,
         skills: selectedSkills,
         availability: true,
-        performance: employeeFormData.performance
+        performance: employeeFormData.performance,
+        notes: ''
       };
       setAvailableStaff(prev => [...prev, newEmployee]);
     }
@@ -885,6 +977,20 @@ function App() {
     });
   });
 
+  // Build a unique list of all employees currently in the system
+  const allEmployeesMap = new Map();
+  availableStaff.forEach(emp => allEmployeesMap.set(emp.id, emp));
+  Object.values(roles).forEach(list => {
+    list.forEach(emp => {
+      if (!allEmployeesMap.has(emp.id)) {
+        allEmployeesMap.set(emp.id, emp);
+      }
+    });
+  });
+  const allEmployees = Array.from(allEmployeesMap.values()).sort((a, b) =>
+    a.name.localeCompare(b.name)
+  );
+
   return (
     <div className="App">
       <div className="sidebar">
@@ -908,7 +1014,10 @@ function App() {
             <span className="nav-icon">📊</span>
             Reports
           </button>
-          <button className="nav-item">
+          <button 
+            className={`nav-item ${currentView === 'performance' ? 'active' : ''}`}
+            onClick={() => setCurrentView('performance')}
+          >
             <span className="nav-icon">⭐</span>
             Performance Notes
           </button>
@@ -1931,6 +2040,101 @@ function App() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {currentView === 'performance' && (
+          <div className="performance-view">
+            <div className="content-header">
+              <div className="content-header-left">
+                <h2 className="content-title">Performance Notes</h2>
+                <p className="content-subtitle">
+                  Adjust ratings and capture shift-by-shift notes. Any changes here will update
+                  the star ratings used in the Scheduling view.
+                </p>
+              </div>
+            </div>
+
+            <div className="available-section">
+              <h3 className="section-title">Team Roster</h3>
+              <div className="available-staff-grid">
+                {allEmployees.map(emp => {
+                  // Simple label based on rating
+                  let ratingLabel = 'Developing';
+                  if (emp.performance >= 4.5) ratingLabel = 'Top performer';
+                  else if (emp.performance >= 4.0) ratingLabel = 'Consistent';
+                  else if (emp.performance >= 3.5) ratingLabel = 'Needs coaching';
+
+                  return (
+                    <div key={emp.id} className="employee-card">
+                      <div className="employee-card-header">
+                        <span className="employee-name">{emp.name}</span>
+                        <span className="performance-badge">
+                          {emp.performance?.toFixed(1)}★
+                        </span>
+                      </div>
+
+                      {emp.skills && emp.skills.length > 0 && (
+                        <div className="employee-skills">
+                          {emp.skills.map(skill => (
+                            <span key={skill} className="skill-tag">
+                              {skill}
+                            </span>
+                          ))}
+                        </div>
+                      )}
+
+                      <div className="performance-slider-container" style={{ marginTop: '0.5rem' }}>
+                        <input
+                          type="range"
+                          min="1"
+                          max="5"
+                          step="0.1"
+                          value={emp.performance || 3}
+                          onChange={(e) =>
+                            updateEmployeePerformanceFields(emp.id, {
+                              performance: parseFloat(e.target.value),
+                            })
+                          }
+                          className="performance-slider"
+                        />
+                        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end' }}>
+                          <span className="performance-value">
+                            {(emp.performance || 3).toFixed(1)}★
+                          </span>
+                          <span
+                            style={{
+                              fontSize: '0.75rem',
+                              fontWeight: 600,
+                              color: '#666',
+                              textTransform: 'uppercase',
+                              letterSpacing: '0.06em',
+                            }}
+                          >
+                            {ratingLabel}
+                          </span>
+                        </div>
+                      </div>
+
+                      <label className="input-label" style={{ marginTop: '0.75rem' }}>
+                        Performance Notes
+                      </label>
+                      <textarea
+                        className="feedback-textarea"
+                        rows={4}
+                        placeholder="Add quick notes about tonight’s shift, strengths, and coaching points..."
+                        value={emp.notes || ''}
+                        onChange={(e) =>
+                          updateEmployeePerformanceFields(emp.id, {
+                            notes: e.target.value,
+                          })
+                        }
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
           </div>
         )}
       </div>
