@@ -88,7 +88,7 @@ const initialEmployees = [
 const initialTasks = [
   { id: 1, title: 'Prep bar area', assignedTo: 'Bob', status: 'in-progress', section: 'Bar', timestamp: '18:30', photo: 'bar.jpg' },
   { id: 2, title: 'Check table 12 cleanup', assignedTo: 'Cathy', status: 'pending', section: 'Dining', timestamp: '18:45', photo: null },
-  { id: 3, title: 'Restock utensils', assignedTo: 'Alice', status: 'completed', section: 'Kitchen', timestamp: '18:15', photo: 'utensils.jpg' },
+  { id: 3, title: 'Restock utensils', assignedTo: 'Alice', status: 'completed', section: 'Kitchen', timestamp: '18:15', photo: 'utensils.jpg', verified: true },
   { id: 4, title: 'Clean espresso machine', assignedTo: null, status: 'pending', section: 'Bar', timestamp: '19:00', photo: null },
   { id: 5, title: 'Set up outdoor seating', assignedTo: 'Carol', status: 'in-progress', section: 'Outdoor', timestamp: '18:20', photo: 'outdoor.jpg' },
 ];
@@ -804,6 +804,88 @@ function App() {
     'completed': tasks.filter(task => task.status === 'completed')
   };
 
+  // Reporting helpers
+  const completedTasks = tasks.filter(task => task.status === 'completed');
+  const totalTasks = tasks.length;
+  const completedCount = completedTasks.length;
+  const completionRate = totalTasks ? Math.round((completedCount / totalTasks) * 100) : 0;
+  const verifiedCount = completedTasks.filter(t => t.verified).length;
+  const withPhotoCount = completedTasks.filter(t => t.photo).length;
+  const feedbackOnCompleted = completedTasks.filter(t => t.feedback).length;
+
+  const tasksBySectionSummary = completedTasks.reduce((acc, task) => {
+    const key = task.section || 'Other';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const sectionBreakdown = Object.entries(tasksBySectionSummary).sort((a, b) => b[1] - a[1]);
+
+  const completionsByStaffSummary = completedTasks.reduce((acc, task) => {
+    const key = task.assignedTo || 'Unassigned';
+    acc[key] = (acc[key] || 0) + 1;
+    return acc;
+  }, {});
+
+  const topClosers = Object.entries(completionsByStaffSummary)
+    .filter(([name]) => name !== 'Unassigned')
+    .sort((a, b) => b[1] - a[1])
+    .slice(0, 3);
+
+  const getTaskReportSummary = (task) => {
+    const section = (task.section || '').toLowerCase();
+    let sectionImpact = '';
+
+    switch (section) {
+      case 'bar':
+        sectionImpact =
+          'Helped keep the bar service clean, stocked, and ready for the next wave of drink orders.';
+        break;
+      case 'dining':
+        sectionImpact =
+          'Improved table readiness and guest turnover in the dining room, reducing wait times.';
+        break;
+      case 'kitchen':
+        sectionImpact =
+          'Supported back-of-house flow, keeping the line organized and preventing ticket backups.';
+        break;
+      case 'outdoor':
+        sectionImpact =
+          'Maintained the outdoor section so it stayed guest-ready and aligned with the main dining experience.';
+        break;
+      default:
+        sectionImpact =
+          'Contributed to overall shift readiness and guest experience for this service block.';
+        break;
+    }
+
+    let urgencyImpact = '';
+    if (task.priority === 'urgent') {
+      urgencyImpact =
+        ' This was flagged as an urgent task tied to live shift changes, so completing it quickly helped stabilize service flow.';
+    }
+
+    let verificationImpact = '';
+    if (task.verified) {
+      verificationImpact =
+        ' Completion was verified by a manager using the attached photo, so future audits can treat this as fully confirmed.';
+    } else if (task.photo) {
+      verificationImpact =
+        ' A photo was attached as informal evidence, even though the verification flag is not set.';
+    } else {
+      verificationImpact =
+        ' No photo evidence was attached, so completion is based on staff reporting only.';
+    }
+
+    let feedbackImpact = '';
+    if (task.feedback) {
+      feedbackImpact =
+        ' Manager feedback was recorded for this task and should be reviewed before the next similar assignment.';
+    }
+
+    return `${sectionImpact}${urgencyImpact}${verificationImpact}${feedbackImpact}`.trim();
+  };
+
   const getSuggestedAssignments = (roleName) => {
     // Suggest based on skills and performance
     const suggested = availableStaff
@@ -1010,7 +1092,10 @@ function App() {
             <span className="nav-icon">✓</span>
             Tasks
           </button>
-          <button className="nav-item">
+          <button 
+            className={`nav-item ${currentView === 'reports' ? 'active' : ''}`}
+            onClick={() => setCurrentView('reports')}
+          >
             <span className="nav-icon">📊</span>
             Reports
           </button>
@@ -2040,6 +2125,157 @@ function App() {
                 </div>
               </>
             )}
+          </div>
+        )}
+
+        {currentView === 'reports' && (
+          <div className="reports-view">
+            <div className="content-header">
+              <div className="content-header-left">
+                <h2 className="content-title">Shift Reports</h2>
+                <p className="content-subtitle">
+                  Summary of all completed tasks for this session, including verification status,
+                  photos, and manager feedback.
+                </p>
+              </div>
+            </div>
+
+            {/* High-level metrics */}
+            <div className="reports-metrics-grid">
+              <div className="report-metric-card">
+                <span className="metric-label">Total Tasks</span>
+                <span className="metric-value">{totalTasks}</span>
+              </div>
+              <div className="report-metric-card">
+                <span className="metric-label">Completed</span>
+                <span className="metric-value">{completedCount}</span>
+              </div>
+              <div className="report-metric-card">
+                <span className="metric-label">Completion Rate</span>
+                <span className="metric-value">{completionRate}%</span>
+              </div>
+              <div className="report-metric-card">
+                <span className="metric-label">Verified w/ Photo</span>
+                <span className="metric-value">
+                  {verifiedCount}/{withPhotoCount}
+                </span>
+              </div>
+              <div className="report-metric-card">
+                <span className="metric-label">Completed w/ Manager Feedback</span>
+                <span className="metric-value">{feedbackOnCompleted}</span>
+              </div>
+            </div>
+
+            {/* Section breakdown + Top closers */}
+            <div className="reports-summary-row">
+              <div className="report-panel">
+                <h3 className="report-panel-title">Completion by Section</h3>
+                {sectionBreakdown.length === 0 ? (
+                  <p className="report-empty-state">No completed tasks yet for this shift.</p>
+                ) : (
+                  <ul className="report-list">
+                    {sectionBreakdown.map(([section, count]) => (
+                      <li key={section} className="report-list-item">
+                        <span className="report-list-label">{section}</span>
+                        <span className="report-list-value">{count}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+
+              <div className="report-panel">
+                <h3 className="report-panel-title">Top Closers</h3>
+                {topClosers.length === 0 ? (
+                  <p className="report-empty-state">No assigned staff completions yet.</p>
+                ) : (
+                  <ul className="report-list">
+                    {topClosers.map(([name, count]) => (
+                      <li key={name} className="report-list-item">
+                        <span className="report-list-label">{name}</span>
+                        <span className="report-list-value">{count} tasks</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+              </div>
+            </div>
+
+            {/* Detailed reports for each completed task */}
+            <div className="reports-detailed-section">
+              <h3 className="section-title">Completed Task Reports</h3>
+              {completedTasks.length === 0 ? (
+                <p className="report-empty-state">
+                  Once tasks are marked as completed, they will appear here with a full summary.
+                </p>
+              ) : (
+                <div className="reports-cards-grid">
+                  {completedTasks.map(task => {
+                    const isVerified = !!task.verified;
+                    const hasPhoto = !!task.photo;
+                    const hasFeedback = !!task.feedback;
+
+                    return (
+                      <div key={task.id} className="report-card">
+                        <div className="report-card-header">
+                          <div>
+                            <h4 className="report-task-title">{task.title}</h4>
+                            <div className="report-task-tags">
+                              <span className="task-section-badge">
+                                {task.section || 'General'}
+                              </span>
+                              {task.priority === 'urgent' && (
+                                <span className="task-chip urgent">Urgent</span>
+                              )}
+                            </div>
+                          </div>
+                          <div className="report-task-status">
+                            <span className={`status-pill ${isVerified ? 'verified' : ''}`}>
+                              {isVerified ? 'Completed & Verified' : 'Completed'}
+                            </span>
+                          </div>
+                        </div>
+
+                        <div className="report-task-meta">
+                          <span>⏰ {task.timestamp}</span>
+                          {task.assignedTo && <span>👤 {task.assignedTo}</span>}
+                          {hasPhoto && <span>📷 Photo attached</span>}
+                        </div>
+
+                        <p className="report-summary-text">
+                          {getTaskReportSummary(task)}
+                        </p>
+
+                        {hasFeedback && (
+                          <div className="report-feedback-block">
+                            <div className="feedback-header">
+                              <span className="feedback-icon">💬</span>
+                              <span className="feedback-label">Manager Feedback</span>
+                            </div>
+                            <p className="feedback-text">{task.feedback}</p>
+                            {task.feedbackTimestamp && (
+                              <span className="feedback-timestamp">
+                                Logged at {task.feedbackTimestamp}
+                              </span>
+                            )}
+                          </div>
+                        )}
+
+                        {hasPhoto && (
+                          <div className="report-photo-preview">
+                            <img
+                              src={task.photo}
+                              alt="Task evidence"
+                              className="completed-task-photo"
+                            />
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
           </div>
         )}
 
