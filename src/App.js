@@ -91,6 +91,7 @@ const initialTasks = [
   { id: 3, title: 'Restock utensils', assignedTo: 'Alice', status: 'completed', section: 'Kitchen', timestamp: '18:15', photo: 'utensils.jpg', verified: true },
   { id: 4, title: 'Clean espresso machine', assignedTo: null, status: 'pending', section: 'Bar', timestamp: '19:00', photo: null },
   { id: 5, title: 'Set up outdoor seating', assignedTo: 'Carol', status: 'in-progress', section: 'Outdoor', timestamp: '18:20', photo: 'outdoor.jpg' },
+  { id: 6, title: 'Take out trash', assignedTo: 'Sam', status: 'completed', section: 'Kitchen', timestamp: '18:50', photo: 'trash.jpg', verified: true },
 ];
 
 // Initial role capacities
@@ -803,6 +804,14 @@ function App() {
     'in-progress': tasks.filter(task => task.status === 'in-progress'),
     'completed': tasks.filter(task => task.status === 'completed')
   };
+
+  // Group tasks by person (assignee)
+  const tasksByAssignee = tasks.reduce((acc, task) => {
+    const key = task.assignedTo || 'Unassigned';
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(task);
+    return acc;
+  }, {});
 
   // Reporting helpers
   const completedTasks = tasks.filter(task => task.status === 'completed');
@@ -1577,7 +1586,13 @@ function App() {
         {currentView === 'tasks' && (
           <div className="tasks-view">
             <div className="content-header">
-              <h2 className="content-title">Task Monitor</h2>
+              <div className="content-header-left">
+                <h2 className="content-title">Task Monitor</h2>
+                <p className="content-subtitle">
+                  Track shift work by section, status, or person, and spot what still needs attention at a glance.
+                </p>
+              </div>
+              
               <div className="view-mode-toggle">
                 <button 
                   className={`mode-btn ${taskViewMode === 'section' ? 'active' : ''}`}
@@ -1591,10 +1606,16 @@ function App() {
                 >
                   By Status
                 </button>
+                <button 
+                  className={`mode-btn ${taskViewMode === 'person' ? 'active' : ''}`}
+                  onClick={() => setTaskViewMode('person')}
+                >
+                  By Person
+                </button>
               </div>
             </div>
 
-            {taskViewMode === 'section' ? (
+            {taskViewMode === 'section' && (
               <>
                 <div className="task-filters">
                   <button 
@@ -1693,7 +1714,9 @@ function App() {
                   ))}
                 </div>
               </>
-            ) : (
+            )}
+
+            {taskViewMode === 'status' && (
               <div className="task-status-board">
                 {/* Pending Column */}
                 <div 
@@ -1861,6 +1884,157 @@ function App() {
                     ))}
                   </div>
                 </div>
+              </div>
+            )}
+
+            {taskViewMode === 'person' && (
+              <div className="task-person-board">
+                {Object.entries(tasksByAssignee).map(([assignee, personTasks]) => {
+                  const total = personTasks.length;
+                  const pending = personTasks.filter(t => t.status === 'pending').length;
+                  const inProgress = personTasks.filter(t => t.status === 'in-progress').length;
+                  const completed = personTasks.filter(t => t.status === 'completed').length;
+                  const urgentCount = personTasks.filter(t => t.priority === 'urgent').length;
+                  const withPhoto = personTasks.filter(t => t.photo).length;
+                  const completionRate = total ? Math.round((completed / total) * 100) : 0;
+
+                  const isUnassigned = assignee === 'Unassigned';
+                  const employee =
+                    initialEmployees.find(e => e.name === assignee) || null;
+
+                  return (
+                    <div
+                      key={assignee}
+                      className={`person-task-card ${isUnassigned ? 'person-unassigned' : ''}`}
+                    >
+                      <div className="person-task-header">
+                        <div className="person-identity">
+                          <div
+                            className={`person-avatar ${
+                              isUnassigned ? 'person-avatar-unassigned' : ''
+                            }`}
+                          >
+                            {isUnassigned ? 'U' : assignee[0]}
+                          </div>
+
+                          <div className="person-title-block">
+                            <h3 className="person-name">
+                              {isUnassigned ? 'Unassigned tasks' : assignee}
+                            </h3>
+
+                            {isUnassigned ? (
+                              <span className="person-tag unassigned-tag">
+                                Tasks that don’t have an owner yet
+                              </span>
+                            ) : (
+                              employee &&
+                              employee.skills &&
+                              employee.skills.length > 0 && (
+                                <div className="person-skills">
+                                  {employee.skills.map(skill => (
+                                    <span key={skill} className="skill-tag small">
+                                      {skill}
+                                    </span>
+                                  ))}
+                                </div>
+                              )
+                            )}
+                          </div>
+                        </div>
+
+                        <div className="person-stats">
+                          <div className="person-stat">
+                            <span className="person-stat-label">Tasks</span>
+                            <span className="person-stat-value">{total}</span>
+                          </div>
+                          <div className="person-stat">
+                            <span className="person-stat-label">Completed</span>
+                            <span className="person-stat-value">
+                              {completed} ({completionRate}%)
+                            </span>
+                          </div>
+                          <div className="person-stat">
+                            <span className="person-stat-label">Urgent</span>
+                            <span className="person-stat-value">{urgentCount}</span>
+                          </div>
+                          <div className="person-stat">
+                            <span className="person-stat-label">With Photo</span>
+                            <span className="person-stat-value">{withPhoto}</span>
+                          </div>
+                        </div>
+                      </div>
+
+                      <div className="person-status-overview">
+                        <div
+                          className="status-chip"
+                          style={{ borderColor: getTaskStatusColor('pending') }}
+                        >
+                          <span
+                            className="status-dot"
+                            style={{ backgroundColor: getTaskStatusColor('pending') }}
+                          />
+                          <span>Not started: {pending}</span>
+                        </div>
+                        <div
+                          className="status-chip"
+                          style={{ borderColor: getTaskStatusColor('in-progress') }}
+                        >
+                          <span
+                            className="status-dot"
+                            style={{ backgroundColor: getTaskStatusColor('in-progress') }}
+                          />
+                          <span>Pending approval: {inProgress}</span>
+                        </div>
+                        <div
+                          className="status-chip"
+                          style={{ borderColor: getTaskStatusColor('completed') }}
+                        >
+                          <span
+                            className="status-dot"
+                            style={{ backgroundColor: getTaskStatusColor('completed') }}
+                          />
+                          <span>Completed: {completed}</span>
+                        </div>
+                      </div>
+
+                      <ul className="person-task-list">
+                        {personTasks
+                          .slice()
+                          .sort((a, b) => (a.timestamp || '').localeCompare(b.timestamp || ''))
+                          .map(task => {
+                            const statusColor = getTaskStatusColor(task.status);
+                            let statusLabel = 'Not started';
+                            if (task.status === 'in-progress') statusLabel = 'Pending approval';
+                            if (task.status === 'completed') statusLabel = 'Completed';
+
+                            return (
+                              <li key={task.id} className="person-task-item">
+                                <div className="person-task-main">
+                                  <span className="person-task-title">{task.title}</span>
+                                  <span
+                                    className="person-task-status-pill"
+                                    style={{ borderColor: statusColor, color: statusColor }}
+                                  >
+                                    {statusLabel}
+                                  </span>
+                                </div>
+                                <div className="person-task-meta">
+                                  <span>⏰ {task.timestamp}</span>
+                                  <span>📍 {task.section}</span>
+                                  {task.priority === 'urgent' && (
+                                    <span className="task-chip urgent">Urgent</span>
+                                  )}
+                                  {task.photo && (
+                                    <span className="task-chip photo-chip">📷 Photo</span>
+                                  )}
+                                </div>
+                              </li>
+                            );
+                          })}
+                      </ul>
+                    </div>
+                  );
+                })}
               </div>
             )}
 

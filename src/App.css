@@ -2366,3 +2366,246 @@ html {
     grid-template-columns: minmax(0, 1fr);
   }
 }
+
+/* Task Monitor: By Person view */
+.task-person-board {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+  gap: 1.25rem;
+  margin-top: 1rem;
+}
+
+.person-task-card {
+  background: #ffffff;
+  border-radius: 0.75rem;
+  padding: 1rem 1.1rem;
+  box-shadow: 0 8px 18px rgba(15, 23, 42, 0.06);
+  border: 1px solid #e2e8f0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem;
+}
+
+.person-task-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  gap: 0.75rem;
+}
+
+.person-identity {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+}
+
+.person-avatar {
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #38bdf8, #6366f1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-weight: 700;
+  font-size: 1rem;
+  text-transform: uppercase;
+}
+
+.person-title-block {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+}
+
+.person-name {
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #0f172a;
+  display: flex;
+  align-items: center;
+  gap: 0.4rem;
+}
+
+.person-tag {
+  font-size: 0.7rem;
+  padding: 0.15rem 0.4rem;
+  border-radius: 999px;
+  background: #f8fafc;
+  border: 1px dashed #cbd5f5;
+  color: #475569;
+}
+
+.person-skills {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem;
+}
+
+.skill-tag.small {
+  font-size: 0.7rem;
+  padding: 0.1rem 0.45rem;
+}
+
+.person-stats {
+  display: grid;
+  grid-auto-flow: row;
+  gap: 0.25rem;
+  text-align: right;
+}
+
+.person-stat {
+  display: flex;
+  flex-direction: column;
+  gap: 0.05rem;
+}
+
+.person-stat-label {
+  font-size: 0.7rem;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: #94a3b8;
+}
+
+.person-stat-value {
+  font-size: 0.85rem;
+  font-weight: 600;
+  color: #0f172a;
+}
+
+/* status legend under header */
+
+.person-status-overview {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.15rem;
+}
+
+.status-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.3rem;
+  padding: 0.15rem 0.5rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.7rem;
+  color: #475569;
+  background: #f8fafc;
+}
+
+.status-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+}
+
+/* per-person task list */
+
+.person-task-list {
+  list-style: none;
+  padding: 0;
+  margin: 0.25rem 0 0;
+  border-top: 1px dashed #e2e8f0;
+}
+
+.person-task-item {
+  padding: 0.5rem 0;
+  border-bottom: 1px dashed #e2e8f0;
+}
+
+.person-task-item:last-child {
+  border-bottom: none;
+}
+
+.person-task-main {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 0.5rem;
+}
+
+.person-task-title {
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: #0f172a;
+}
+
+.person-task-status-pill {
+  border-radius: 999px;
+  padding: 0.15rem 0.55rem;
+  border: 1px solid #cbd5f5;
+  font-size: 0.7rem;
+  font-weight: 500;
+  background: #ffffff;
+}
+
+.person-task-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  margin-top: 0.25rem;
+  font-size: 0.75rem;
+  color: #64748b;
+}
+
+.person-task-meta .task-chip {
+  font-size: 0.7rem;
+}
+
+.task-chip.photo-chip {
+  background: #ecfeff;
+  border-color: #06b6d4;
+  color: #0e7490;
+}
+
+/* Generic person card layout safety */
+.person-task-card {
+  overflow: hidden;
+}
+
+/* Make sure the left identity block can shrink and wrap */
+.person-identity {
+  display: flex;
+  gap: 0.75rem;
+  min-width: 0; /* allow flex children to shrink */
+}
+
+.person-title-block {
+  min-width: 0;
+}
+
+/* Allow the name + any inline bits to wrap instead of pushing out */
+.person-name {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: 600;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem;
+  word-break: break-word;
+}
+
+/* Pill used under the name */
+.person-tag {
+  display: inline-flex;
+  align-items: center;
+  padding: 0.15rem 0.6rem;
+  border-radius: 999px;
+  border: 1px solid #e2e8f0;
+  font-size: 0.75rem;
+  line-height: 1.3;
+}
+
+/* Special look for the Unassigned bucket */
+.person-unassigned .person-tag.unassigned-tag {
+  margin-top: 0.25rem;
+  max-width: 100%;
+  white-space: normal; /* allow wrapping in the chip text */
+}
+
+.person-avatar-unassigned {
+  background: #e2e8f0;
+  color: #475569;
+}
