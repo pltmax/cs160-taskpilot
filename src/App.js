@@ -516,7 +516,13 @@ function App() {
     if (!draggedEmployee) return;
 
     // Add back to available staff
-    setAvailableStaff((prev) => [...prev, draggedEmployee]);
+    // setAvailableStaff((prev) => [...prev, draggedEmployee]);
+    setAvailableStaff((prev) => {
+      const alreadyExists = prev.some(emp => emp.id === draggedEmployee.id);
+      if (alreadyExists) return prev;     
+    
+      return [...prev, draggedEmployee];  
+    });
 
     // Remove from all roles
     setRoles((prev) => {
