@@ -1788,10 +1788,8 @@ function App() {
                       {availableStaff.map((emp) => (
                         <option key={emp.id} value={emp.name}>
                           {emp.name}{" "}
-                          {emp.skills.includes(showRoleEmployeeModal)
-                            ? "✓"
-                            : ""}{" "}
-                          ({emp.performance}★)
+                          {emp.skills.includes(showRoleEmployeeModal) ? "✓" : ""}{" "}
+                          ({emp.skills.join(", ")})
                         </option>
                       ))}
                     </select>
@@ -2760,12 +2758,6 @@ function App() {
                 <span className="metric-value">
                   {verifiedCount}/{withPhotoCount}
                 </span>
-              </div>
-              <div className="report-metric-card">
-                <span className="metric-label">
-                  Completed w/ Manager Feedback
-                </span>
-                <span className="metric-value">{feedbackOnCompleted}</span>
               </div>
             </div>
 
