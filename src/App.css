@@ -2610,3 +2610,10 @@ html {
   background: #e2e8f0;
   color: #475569;
 }
+
+.employee-select[multiple] {
+  height: 220px;
+  background-image: none;
+  padding-right: 1rem;
+  overflow-y: auto;
+}

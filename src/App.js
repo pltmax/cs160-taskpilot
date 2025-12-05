@@ -202,7 +202,7 @@ function App() {
   });
   const [selectedSkills, setSelectedSkills] = useState([]);
   const [showRoleEmployeeModal, setShowRoleEmployeeModal] = useState(null); // stores roleName when adding to specific role
-  const [selectedEmployeeForRole, setSelectedEmployeeForRole] = useState(""); // stores selected employee name before adding
+  const [selectedEmployeeForRole, setSelectedEmployeeForRole] = useState([]); // stores selected employee names before adding (multi-select)
   const [showVerificationModal, setShowVerificationModal] = useState(false);
   const [taskToVerify, setTaskToVerify] = useState(null);
   const [showAddTaskModal, setShowAddTaskModal] = useState(false);
@@ -567,29 +567,42 @@ function App() {
 
   const openAddEmployeeToRoleModal = (roleName) => {
     setShowRoleEmployeeModal(roleName);
-    setSelectedEmployeeForRole("");
+    setSelectedEmployeeForRole([]);
   };
 
   const addEmployeeToRole = () => {
-    if (!selectedEmployeeForRole || !showRoleEmployeeModal) return;
+    if (!selectedEmployeeForRole.length || !showRoleEmployeeModal) return;
 
-    const employee = availableStaff.find(
-      (emp) => emp.name === selectedEmployeeForRole
+    // Find all selected employees by name
+    const employeesToAdd = availableStaff.filter((emp) =>
+      selectedEmployeeForRole.includes(emp.name)
     );
-    if (!employee) return;
 
-    // Add to role
-    setRoles((prev) => ({
-      ...prev,
-      [showRoleEmployeeModal]: [...prev[showRoleEmployeeModal], employee],
-    }));
+    if (!employeesToAdd.length) return;
 
-    // Remove from available staff
-    setAvailableStaff((prev) => prev.filter((emp) => emp.id !== employee.id));
+    // Add them to the chosen role (avoid duplicates)
+    setRoles((prev) => {
+      const current = prev[showRoleEmployeeModal] || [];
+      const newEmployees = employeesToAdd.filter(
+        (emp) => !current.some((e) => e.id === emp.id)
+      );
 
-    // Close modal and reset
+      return {
+        ...prev,
+        [showRoleEmployeeModal]: [...current, ...newEmployees],
+      };
+    });
+
+    // Remove them from the available staff pool
+    setAvailableStaff((prev) =>
+      prev.filter(
+        (emp) => !employeesToAdd.some((added) => added.id === emp.id)
+      )
+    );
+
+    // Close modal and reset selection
     setShowRoleEmployeeModal(null);
-    setSelectedEmployeeForRole("");
+    setSelectedEmployeeForRole([]);
   };
 
   // Task drag and drop handlers
@@ -1768,7 +1781,7 @@ function App() {
                   className="modal-overlay"
                   onClick={() => {
                     setShowRoleEmployeeModal(null);
-                    setSelectedEmployeeForRole("");
+                    setSelectedEmployeeForRole([]);
                   }}
                 ></div>
                 <div className="modal employee-to-role-modal">
@@ -1778,13 +1791,16 @@ function App() {
                   <div className="modal-body">
                     <label className="input-label">Employee List</label>
                     <select
+                      multiple
                       className="employee-select"
                       value={selectedEmployeeForRole}
-                      onChange={(e) =>
-                        setSelectedEmployeeForRole(e.target.value)
-                      }
+                      onChange={(e) => {
+                        const values = Array.from(e.target.selectedOptions).map(
+                          (opt) => opt.value
+                        );
+                        setSelectedEmployeeForRole(values);
+                      }}
                     >
-                      <option value=""></option>
                       {availableStaff.map((emp) => (
                         <option key={emp.id} value={emp.name}>
                           {emp.name}{" "}
@@ -1799,7 +1815,7 @@ function App() {
                       className="modal-cancel-btn"
                       onClick={() => {
                         setShowRoleEmployeeModal(null);
-                        setSelectedEmployeeForRole("");
+                        setSelectedEmployeeForRole([]);
                       }}
                     >
                       Cancel
@@ -1807,7 +1823,7 @@ function App() {
                     <button
                       className="modal-confirm-btn"
                       onClick={addEmployeeToRole}
-                      disabled={!selectedEmployeeForRole}
+                      disabled={!selectedEmployeeForRole.length}
                     >
                       Add Employee
                     </button>
