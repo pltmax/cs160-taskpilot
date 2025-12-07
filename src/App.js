@@ -1,171 +1,21 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
-
-// Initial data
-const initialEmployees = [
-  {
-    id: 1,
-    name: "Bob",
-    skills: ["bartender"],
-    availability: true,
-    performance: 4.8,
-    notes:
-      "Anchors the Friday/Saturday bar rush. Keeps wells organized, tickets moving quickly, and remembers regulars by name. Occasionally needs a reminder to log 86’d items in the POS, but guest experience scores stay consistently high.",
-  },
-  {
-    id: 2,
-    name: "Linda",
-    skills: ["bartender"],
-    availability: true,
-    performance: 4.3,
-    notes:
-      "Reliable opener who keeps bar prep ahead of the curve. Strong wine and spirits knowledge and double-checks orders before sending. Can be a bit cautious during peak cocktail volume, but accuracy is excellent and guest complaints are rare.",
-  },
-  {
-    id: 3,
-    name: "Cathy",
-    skills: ["runner"],
-    availability: true,
-    performance: 4.9,
-    notes:
-      "Fastest food runner on the team. Tickets almost never sit in the window and hot food goes out at the right temp. Frequently jumps in to help bussers without being asked. Needs mild coaching on pacing breaks to avoid burnout during double turns.",
-  },
-  {
-    id: 4,
-    name: "Alice",
-    skills: ["runner", "server"],
-    availability: true,
-    performance: 4.6,
-    notes:
-      "Strong hybrid runner/server who calmly handles high-pressure sections. Great at teaching newer staff expo and ticket reading. Double-checks modifiers, which can slow her down slightly, but dramatically reduces comps and remakes.",
-  },
-  {
-    id: 5,
-    name: "Elissa",
-    skills: ["runner"],
-    availability: true,
-    performance: 4.2,
-    notes:
-      "Dependable mid-shift runner who keeps side stations stocked and communicates clearly with servers. Occasionally misses a garnish or extra side when the board is packed, but corrects quickly after feedback and shows steady improvement each week.",
-  },
-  {
-    id: 6,
-    name: "Carol",
-    skills: ["runner"],
-    availability: true,
-    performance: 4.7,
-    notes:
-      "High-energy runner who is especially strong on busy patio nights. Reads the room well and prioritizes kids’ food and hot plates. Sometimes takes on too many tables at once, so gentle reminders to delegate bussing tasks help maintain pace.",
-  },
-  {
-    id: 7,
-    name: "Mike",
-    skills: ["server"],
-    availability: true,
-    performance: 4.4,
-    notes:
-      "Guest-facing server with great table-side presence and strong upsell instincts on appetizers and desserts. Ticket times are usually on target. Needs occasional coaching on using pre-shifts to review specials before service to avoid last-minute questions.",
-  },
-  {
-    id: 8,
-    name: "Sam",
-    skills: ["dishwasher"],
-    availability: true,
-    performance: 4.1,
-    notes:
-      "Steady dishwasher who keeps the dish pit under control even when the dining room is full. Rack organization is improving and glassware breakage is low. Can fall slightly behind when large parties turn over at once, but recovers quickly with clear priorities.",
-  },
-  {
-    id: 9,
-    name: "Ethan",
-    skills: ["server"],
-    availability: true,
-    performance: 4.3,
-    notes:
-      "Calm, detail-oriented server who rarely misrings orders. Guests appreciate his clear explanations of menu changes. Could project more confidence when handling comps or difficult guests, but always escalates appropriately to the manager when needed.",
-  },
-  {
-    id: 10,
-    name: "Vivian",
-    skills: ["server"],
-    availability: true,
-    performance: 4.7,
-    notes:
-      "Consistently one of the top tip earners. Manages large sections without sacrificing hospitality and maintains strong sales on specials and add-ons. Occasionally stretches herself thin by taking extra tables, but still keeps ticket error rate extremely low.",
-  },
-];
-
-const initialTasks = [
-  {
-    id: 1,
-    title: "Prep bar area",
-    assignedTo: "Bob",
-    status: "in-progress",
-    section: "Bar",
-    timestamp: "18:30",
-    photo: "bar.jpg",
-  },
-  {
-    id: 2,
-    title: "Check table 12 cleanup",
-    assignedTo: "Cathy",
-    status: "pending",
-    section: "Dining",
-    timestamp: "18:45",
-    photo: null,
-  },
-  {
-    id: 3,
-    title: "Restock utensils",
-    assignedTo: "Alice",
-    status: "completed",
-    section: "Kitchen",
-    timestamp: "18:15",
-    photo: "utensils.jpg",
-    verified: true,
-  },
-  {
-    id: 4,
-    title: "Clean espresso machine",
-    assignedTo: null,
-    status: "pending",
-    section: "Bar",
-    timestamp: "19:00",
-    photo: null,
-  },
-  {
-    id: 5,
-    title: "Set up outdoor seating",
-    assignedTo: "Carol",
-    status: "in-progress",
-    section: "Outdoor",
-    timestamp: "18:20",
-    photo: "outdoor.jpg",
-  },
-  {
-    id: 6,
-    title: "Take out trash",
-    assignedTo: "Sam",
-    status: "completed",
-    section: "Kitchen",
-    timestamp: "18:50",
-    photo: "trash.jpg",
-    verified: true,
-  },
-];
-
-// Initial role capacities
-const initialRoleCapacity = {
-  bartender: 2,
-  runner: 4,
-  server: 3,
-  dishwasher: 1,
-};
+import {
+  initialEmployees,
+  initialTasks,
+  initialRoleCapacity,
+} from "./data";
 
 function App() {
   const [currentView, setCurrentView] = useState("scheduling");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
+
+  const buildEmptyRoles = () =>
+    Object.keys(initialRoleCapacity).reduce((acc, role) => {
+      acc[role] = [];
+      return acc;
+    }, {});
 
   // Helper function to get date key
   const getDateKey = (date) => {
@@ -176,12 +26,7 @@ function App() {
   const [schedulesByDate, setSchedulesByDate] = useState({});
 
   // Current schedule state
-  const [roles, setRoles] = useState({
-    bartender: [],
-    runner: [],
-    server: [],
-    dishwasher: [],
-  });
+  const [roles, setRoles] = useState(buildEmptyRoles());
   const [roleCapacity, setRoleCapacity] = useState(initialRoleCapacity);
   const [editingCapacity, setEditingCapacity] = useState(null);
   const [availableStaff, setAvailableStaff] = useState(initialEmployees);
@@ -258,28 +103,16 @@ function App() {
     const savedSchedule = schedulesByDate[dateKey];
 
     if (savedSchedule) {
-      setRoles(
-        savedSchedule.roles || {
-          bartender: [],
-          runner: [],
-          server: [],
-          dishwasher: [],
-        }
-      );
+      setRoles(savedSchedule.roles || buildEmptyRoles());
       setAvailableStaff(savedSchedule.availableStaff || initialEmployees);
       setRoleCapacity(savedSchedule.roleCapacity || initialRoleCapacity);
       setScheduleStatus(savedSchedule.status || "draft");
     } else {
-      setRoles({
-        bartender: [],
-        runner: [],
-        server: [],
-        dishwasher: [],
-      });
+      setRoles(buildEmptyRoles());
       setAvailableStaff(initialEmployees);
       setRoleCapacity(initialRoleCapacity);
       setScheduleStatus("draft");
-    }
+    }    
 
     // Clear any “what-if” options when switching dates
     setChangeSuggestions([]);
