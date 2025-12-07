@@ -2617,3 +2617,37 @@ html {
   padding-right: 1rem;
   overflow-y: auto;
 }
+
+.ai-report-panel {
+  margin-bottom: 1.5rem;
+}
+
+.ai-report-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 1rem;
+  font-size: 1rem;
+  font-weight: 600;
+  color: var(--text-primary);
+}
+
+.ai-generate-btn {
+  padding: 0.5rem 0.9rem;
+  border-radius: 999px;
+  border: none;
+  font-size: 0.85rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ai-report-body p + p {
+  margin-top: 0.4rem;
+}
+
+.ai-report-error {
+  color: #ef4444;
+  font-size: 0.85rem;
+  margin-top: 0.5rem;
+}
+

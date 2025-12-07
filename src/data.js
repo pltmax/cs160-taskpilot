@@ -279,7 +279,7 @@ export const initialEmployees = [
       status: "in-progress",
       section: "Bar",
       timestamp: "18:30",
-      photo: "bar.jpg",
+      photo: "/bar.jpg",
     },
     {
       id: 2,
@@ -297,7 +297,7 @@ export const initialEmployees = [
       status: "completed",
       section: "Kitchen",
       timestamp: "18:15",
-      photo: "utensils.jpg",
+      photo: "/utensils.jpg",
       verified: true,
     },
     {
@@ -316,7 +316,7 @@ export const initialEmployees = [
       status: "in-progress",
       section: "Outdoor",
       timestamp: "18:20",
-      photo: "outdoor.jpg",
+      photo: "/outdoor.jpg",
     },
     {
       id: 6,
@@ -325,7 +325,7 @@ export const initialEmployees = [
       status: "completed",
       section: "Kitchen",
       timestamp: "18:50",
-      photo: "trash.jpg",
+      photo: "/trash.jpg",
       verified: true,
     },
     {

@@ -1,15 +1,16 @@
 import React, { useEffect, useState } from "react";
 import "./App.css";
-import {
-  initialEmployees,
-  initialTasks,
-  initialRoleCapacity,
-} from "./data";
+import { initialEmployees, initialRoleCapacity, initialTasks } from "./data";
 
 function App() {
   const [currentView, setCurrentView] = useState("scheduling");
   const [selectedDate, setSelectedDate] = useState(new Date());
   const [showCalendar, setShowCalendar] = useState(false);
+
+  // AI generated reports
+  const [aiReport, setAiReport] = useState("");
+  const [aiReportLoading, setAiReportLoading] = useState(false);
+  const [aiReportError, setAiReportError] = useState(null);
 
   const buildEmptyRoles = () =>
     Object.keys(initialRoleCapacity).reduce((acc, role) => {
@@ -112,7 +113,7 @@ function App() {
       setAvailableStaff(initialEmployees);
       setRoleCapacity(initialRoleCapacity);
       setScheduleStatus("draft");
-    }    
+    }
 
     // Clear any “what-if” options when switching dates
     setChangeSuggestions([]);
@@ -351,10 +352,10 @@ function App() {
     // Add back to available staff
     // setAvailableStaff((prev) => [...prev, draggedEmployee]);
     setAvailableStaff((prev) => {
-      const alreadyExists = prev.some(emp => emp.id === draggedEmployee.id);
-      if (alreadyExists) return prev;     
-    
-      return [...prev, draggedEmployee];  
+      const alreadyExists = prev.some((emp) => emp.id === draggedEmployee.id);
+      if (alreadyExists) return prev;
+
+      return [...prev, draggedEmployee];
     });
 
     // Remove from all roles
@@ -428,9 +429,7 @@ function App() {
 
     // Remove them from the available staff pool
     setAvailableStaff((prev) =>
-      prev.filter(
-        (emp) => !employeesToAdd.some((added) => added.id === emp.id)
-      )
+      prev.filter((emp) => !employeesToAdd.some((added) => added.id === emp.id))
     );
 
     // Close modal and reset selection
@@ -864,6 +863,74 @@ function App() {
     }
 
     return `${sectionImpact}${urgencyImpact}${verificationImpact}${feedbackImpact}`.trim();
+  };
+
+  const MAX_SHIFT_DATA_LEN = 8000; // Recommended max length for Noggin variable
+
+  const generateAIReport = async () => {
+    if (!completedTasks.length) {
+      setAiReport(
+        "No completed tasks for this shift yet. Once tasks are completed and verified, I can summarize the day for you."
+      );
+      return;
+    }
+
+    setAiReportLoading(true);
+    setAiReportError(null);
+
+    try {
+      // 1) Build the payload with only essential fields needed for summarization
+      const payload = {
+        date: formatDate(selectedDate),
+        totalTasks,
+        completedCount,
+        completionRate,
+        verifiedCount,
+        withPhotoCount,
+        topClosers,
+        sectionBreakdown,
+        sampleTasks: completedTasks.slice(0, 10).map((t) => ({
+          title: t.title,
+          section: t.section,
+          assignedTo: t.assignedTo,
+          priority: t.priority,
+          verified: !!t.verified,
+          hasPhoto: !!t.photo,
+          feedback: t.feedback,
+        })),
+      };
+
+      // 2) Convert to pretty JSON string — this will be passed into Reagent
+      let shiftData = JSON.stringify(payload, null, 2);
+
+      // 3) Truncate the string if it exceeds the max length allowed by the Noggin variable
+      if (shiftData.length > MAX_SHIFT_DATA_LEN) {
+        shiftData =
+          shiftData.slice(0, MAX_SHIFT_DATA_LEN) +
+          "\n\n/* truncated shiftData due to length limit */";
+      }
+
+      // 4) Call your Reagent Noggin endpoint
+      const response = await fetch("https://noggin.rea.gent/cruel-perch-9086", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization:
+            "Bearer rg_v1_swoae9lktczggngxe3rmuupqdam4gtzs6i5w_ngk",
+        },
+        body: JSON.stringify({
+          // fill variables here.
+          shiftData: shiftData,
+        }),
+      }).then((response) => response.text());
+
+      setAiReport(response);
+    } catch (err) {
+      console.error("AI report error:", err);
+      setAiReportError("Failed to generate AI report. Please try again.");
+    } finally {
+      setAiReportLoading(false);
+    }
   };
 
   const getSuggestedAssignments = (roleName) => {
@@ -1637,7 +1704,9 @@ function App() {
                       {availableStaff.map((emp) => (
                         <option key={emp.id} value={emp.name}>
                           {emp.name}{" "}
-                          {emp.skills.includes(showRoleEmployeeModal) ? "✓" : ""}{" "}
+                          {emp.skills.includes(showRoleEmployeeModal)
+                            ? "✓"
+                            : ""}{" "}
                           ({emp.skills.join(", ")})
                         </option>
                       ))}
@@ -2586,6 +2655,43 @@ function App() {
                   verification status, photos, and manager feedback.
                 </p>
               </div>
+            </div>
+
+            {/* AI-generated daily report */}
+            <div className="report-panel ai-report-panel">
+              <div className="ai-report-header">
+                <h3 className="report-panel-title">
+                  AI-generated Daily Summary
+                </h3>
+                {!aiReport && (
+                  <button
+                    className="ai-generate-btn"
+                    onClick={generateAIReport}
+                    disabled={aiReportLoading}
+                  >
+                    {aiReportLoading
+                      ? "Generating..."
+                      : "Generate report for this shift"}
+                  </button>
+                )}
+              </div>
+
+              {aiReportError && (
+                <p className="ai-report-error">{aiReportError}</p>
+              )}
+
+              {aiReport ? (
+                <div className="ai-report-body">
+                  {aiReport.split("\n").map((line, idx) => (
+                    <p key={idx}>{line}</p>
+                  ))}
+                </div>
+              ) : !aiReportLoading ? (
+                <p className="report-empty-state">
+                  Click “Generate report for this shift” to get an AI-written
+                  summary of today’s tasks and completion details.
+                </p>
+              ) : null}
             </div>
 
             {/* High-level metrics */}
